@@ -63,7 +63,7 @@ set USE_PTHREADPOOL=0
 set USE_MAGMA=0
 
 REM --- Plataformas e Ecossistemas Desativados ---
-set libuv_ROOT=C:\pytorch\libuv-install
+set libuv_ROOT=C:\pytorch\third_party\libuv\libuv-install
 set USE_DISTRIBUTED=1
 set USE_GLOO=1
 set USE_LIBUV=1
