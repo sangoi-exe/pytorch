@@ -122,7 +122,7 @@ function(_OPENMP_FLAG_CANDIDATES LANG)
     set(OMP_FLAG_MIPSpro "-mp")
     if(__header_dir MATCHES ".*Microsoft Visual Studio.*")
       # MSVC header. No need to pass it as additional include.
-      set(OMP_FLAG_MSVC "-openmp:experimental" "-openmp")
+      set(OMP_FLAG_MSVC "/openmp")
     else()
       set(OMP_FLAG_MSVC "-openmp:experimental -I${__header_dir}" "-openmp -I${__header_dir}")
     endif()

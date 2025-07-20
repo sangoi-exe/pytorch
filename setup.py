@@ -223,6 +223,7 @@
 
 import os
 import sys
+import traceback
 
 
 if sys.platform == "win32" and sys.maxsize.bit_length() == 31:
@@ -373,7 +374,7 @@ if BUILD_LIBTORCH_WHL:
 
 
 package_type = os.getenv("PACKAGE_TYPE", "wheel")
-version = get_torch_version()
+version = "2.7.1+cu128"
 report(f"Building wheel {package_name}-{version}")
 
 cmake = CMake()
@@ -940,13 +941,23 @@ def configure_extension_build():
     # Configure compile flags
     ################################################################################
 
-    library_dirs = []
+    library_dirs = [
+    #     "C:/pytorch/torch/lib/libshm_windows",
+    #     "C:/pytorch/build/lib",
+    #     # Caminho do CUDA (de CUDA_TOOLKIT_ROOT_DIR)
+    #     "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/lib/x64",
+    #     # Caminho do NvToolsExt (de CUDA_nvToolsExt_LIBRARY)
+    #     "C:/Program Files/NVIDIA Corporation/NvToolsExt/lib/x64",
+    #     # Caminho do OpenMP (de OpenMP_libomp_LIBRARY)
+    #     "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.43.34808/lib/x64",
+    #     "C:/Program Files (x86)/Intel/oneAPI/mkl/2025.2/lib",
+    ]
     extra_install_requires = []
 
     if IS_WINDOWS:
         # /NODEFAULTLIB makes sure we only link to DLL runtime
         # and matches the flags set for protobuf and ONNX
-        extra_link_args = ["/NODEFAULTLIB:LIBCMT.LIB"]
+        extra_link_args = ["/VERBOSE:LIB", "/NODEFAULTLIB:LIBCMT.LIB"]
         # /MD links against DLL runtime
         # and matches the flags set for protobuf and ONNX
         # /EHsc is about standard C++ exception handling
@@ -969,7 +980,58 @@ def configure_extension_build():
     library_dirs.append(lib_path)
 
     main_compile_args = []
-    main_libraries = ["torch_python"]
+    main_libraries = [
+    "torch_python",
+    # "torch",
+    # "torch_cpu",
+    # "torch_cuda",
+    # "c10",
+    # "c10_cuda",
+
+    # # --- Dependências de Terceiros (ativadas no seu CMakeCache.txt) ---
+    # "libprotobuf",            # BUILD_CUSTOM_PROTOBUF=ON
+    # "onnx",                   # Submódulo padrão
+    # "onnx_proto",             # Submódulo padrão
+    # "fmt",                    # Dependência interna
+    # "mimalloc-static",        # USE_MIMALLOC=ON
+    # "pthreadpool",            # USE_PTHREADPOOL=ON
+    # "cpuinfo",                # USE_SYSTEM_CPUINFO=OFF (construído internamente)
+    # "sleef",                  # USE_SYSTEM_SLEEF=OFF (construído internamente)
+    # "shm",
+    # "libomp",                 # USE_OPENMP=ON
+
+    # "mkl_intel_lp64",
+    # "mkl_core",
+    # "mkl_sequential",
+    # # --- Dependências do Sistema (CUDA) ---
+    # "cudart_static",
+    # "cublas",
+    # "cudnn",
+    # "nvrtc",
+    # "nvToolsExt64_1",
+    # "cuda",
+    # "cudadevrt",
+    # "cusparse",
+    # "cusolver",
+    # "cublasLt",
+    # "cufft",
+    # "ucrt",
+
+    # # # --- BIBLIOTECAS DE RUNTIME DO SISTEMA ---
+    # "kernel32",
+    # "user32",
+    # "gdi32",
+    # "winspool",
+    # "shell32",
+    # "ole32",
+    # "oleaut32",
+    # "uuid",
+    # "comdlg32",
+    # "advapi32",
+    # "ucrt",
+    # "vcruntime",
+    # "msvcrt",
+  ]
 
     main_link_args = []
     main_sources = ["torch/csrc/stub.c"]

@@ -1,5 +1,12 @@
 # RPATH stuff
 # see https://cmake.org/Wiki/CMake_RPATH_handling
+
+if(NOT DEFINED TORCH_INSTALL_LIB_DIR)
+  set(TORCH_INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib"
+      CACHE PATH "Diretório onde DLLs do torch serão instaladas" FORCE)
+endif()
+message(STATUS "TORCH_INSTALL_LIB_DIR = ${TORCH_INSTALL_LIB_DIR}")
+
 if(APPLE)
   set(CMAKE_MACOSX_RPATH ON)
   set(_rpath_portable_origin "@loader_path")
@@ -963,31 +970,55 @@ if(USE_MPI)
   endif()
 endif()
 
-# ---[ OpenMP
+# ───────────────────────────────────────────────────────────────────────────
+# OpenMP integration with Intel runtime DLL installation (corrected path)
+# ───────────────────────────────────────────────────────────────────────────
 if(USE_OPENMP AND NOT TARGET caffe2::openmp)
   include(${CMAKE_CURRENT_LIST_DIR}/Modules/FindOpenMP.cmake)
   if(OPENMP_FOUND)
-    message(STATUS "Adding OpenMP CXX_FLAGS: " ${OpenMP_CXX_FLAGS})
-    if(APPLE AND USE_MPS)
-      string(APPEND CMAKE_OBJCXX_FLAGS " ${OpenMP_CXX_FLAGS}")
-    endif()
-    if(OpenMP_CXX_LIBRARIES)
-      message(STATUS "Will link against OpenMP libraries: ${OpenMP_CXX_LIBRARIES}")
-    endif()
+    message(STATUS "Adding OpenMP flags: C='${OpenMP_C_FLAGS}'  CXX='${OpenMP_CXX_FLAGS}'")
+
+    # Create an imported interface target for OpenMP
     add_library(caffe2::openmp INTERFACE IMPORTED)
-    target_link_libraries(caffe2::openmp INTERFACE OpenMP::OpenMP_CXX)
+    target_compile_options(caffe2::openmp INTERFACE
+      ${OpenMP_C_FLAGS}
+      ${OpenMP_CXX_FLAGS}
+    )
+    target_link_libraries(caffe2::openmp INTERFACE
+      OpenMP::OpenMP_CXX
+    )
     list(APPEND Caffe2_DEPENDENCY_LIBS caffe2::openmp)
-    if(MSVC AND OpenMP_CXX_LIBRARIES MATCHES ".*libiomp5md\\.lib.*")
+
+    if(MSVC AND OpenMP_CXX_LIBRARIES MATCHES ".*libiomp5md\\.lib$")
+      message(STATUS "Configuring Intel OpenMP runtime installation for wheel")
+
+      # Prevent MSVC from forcing its own manifest
       target_compile_definitions(caffe2::openmp INTERFACE _OPENMP_NOFORCE_MANIFEST)
-      target_link_options(caffe2::openmp INTERFACE "/NODEFAULTLIB:vcomp")
+      target_link_options     (caffe2::openmp INTERFACE "/NODEFAULTLIB:vcomp")
+
+      # Set the directory where the DLL actually lives
+      set(INTEL_OMP_BIN_DIR
+        "C:/Program Files (x86)/Intel/oneAPI/compiler/2025.2/bin"
+        CACHE PATH "Directory containing libiomp5md.dll" FORCE
+      )
+      set(_omp_dll "${INTEL_OMP_BIN_DIR}/libiomp5md.dll")
+
+      if(EXISTS "${_omp_dll}")
+        message(STATUS "Installing Intel OpenMP DLL: ${_omp_dll}")
+        install(FILES "${_omp_dll}"
+                DESTINATION ${TORCH_INSTALL_LIB_DIR}
+                OPTIONAL
+        )
+      else()
+        message(WARNING "Intel OpenMP DLL not found at ${_omp_dll}; skipping")
+      endif()
     endif()
+
   else()
-    message(WARNING "Not compiling with OpenMP. Suppress this warning with -DUSE_OPENMP=OFF")
+    message(WARNING "Not compiling with OpenMP. Suppress with -DUSE_OPENMP=OFF")
     caffe2_update_option(USE_OPENMP OFF)
   endif()
 endif()
-
-
 
 # ---[ Android specific ones
 if(ANDROID)
@@ -1190,36 +1221,43 @@ if(USE_DISTRIBUTED AND USE_TENSORPIPE)
   endif()
 endif()
 
+# ───────────────────────────────────────────────────────────────────────────
+# Gloo integration (with robust libuv install for Windows)
+# ───────────────────────────────────────────────────────────────────────────
 if(USE_GLOO)
   if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(WARNING "Gloo can only be used on 64-bit systems.")
     caffe2_update_option(USE_GLOO OFF)
   else()
-    # Don't install gloo
+    # Don’t install Gloo as a system-wide target, we bundle it in our wheel
     set(GLOO_INSTALL OFF CACHE BOOL "" FORCE)
     set(GLOO_STATIC_OR_SHARED STATIC CACHE STRING "" FORCE)
 
-    # Temporarily override variables to avoid building Gloo tests/benchmarks
-    set(__BUILD_TEST ${BUILD_TEST})
+    # Temporarily disable tests/benchmarks while configuring Gloo
+    set(__BUILD_TEST      ${BUILD_TEST})
     set(__BUILD_BENCHMARK ${BUILD_BENCHMARK})
-    set(BUILD_TEST OFF)
+    set(BUILD_TEST      OFF)
     set(BUILD_BENCHMARK OFF)
+
     if(USE_ROCM)
       set(ENV{GLOO_ROCM_ARCH} "${PYTORCH_ROCM_ARCH}")
     endif()
+
     if(NOT USE_SYSTEM_GLOO)
-      if(USE_DISTRIBUED AND USE_TENSORPIPE)
+      if(USE_DISTRIBUTED AND USE_TENSORPIPE)
         get_target_property(_include_dirs uv_a INCLUDE_DIRECTORIES)
-        set_target_properties(uv_a PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_include_dirs}")
+        set_target_properties(uv_a PROPERTIES
+          INTERFACE_INCLUDE_DIRECTORIES "${_include_dirs}"
+        )
       endif()
+
       if(USE_NCCL AND NOT USE_SYSTEM_NCCL)
-        # Tell Gloo build system to use bundled NCCL, see
-        # https://github.com/facebookincubator/gloo/blob/950c0e23819779a9e0c70b861db4c52b31d1d1b2/cmake/Dependencies.cmake#L123
         set(NCCL_EXTERNAL ON)
       endif()
+
       set(GLOO_USE_CUDA_TOOLKIT ON CACHE BOOL "" FORCE)
+
       if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0.0")
-        # Remove me when https://github.com/facebookincubator/gloo/pull/424 is landed
         message(WARNING "Downgrading cmake-policy-version for gloo build")
         set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
         add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../third_party/gloo)
@@ -1227,40 +1265,56 @@ if(USE_GLOO)
       else()
         add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../third_party/gloo)
       endif()
-      # Here is a little bit hacky. We have to put PROJECT_BINARY_DIR in front
-      # of PROJECT_SOURCE_DIR with/without conda system. The reason is that
-      # gloo generates a new config.h in the binary diretory.
-      include_directories(BEFORE SYSTEM ${CMAKE_CURRENT_LIST_DIR}/../third_party/gloo)
-      include_directories(BEFORE SYSTEM ${PROJECT_BINARY_DIR}/third_party/gloo)
+
+      include_directories(BEFORE SYSTEM
+        ${CMAKE_CURRENT_LIST_DIR}/../third_party/gloo
+        ${PROJECT_BINARY_DIR}/third_party/gloo
+      )
     else()
       find_package(Gloo)
       if(NOT Gloo_FOUND)
         message(FATAL_ERROR "Cannot find gloo")
       endif()
-      message("Found gloo: ${Gloo_LIBRARY}")
-      message("Found gloo include directories: ${Gloo_INCLUDE_DIRS}")
+      message(STATUS "Found gloo: ${Gloo_LIBRARY}")
+      message(STATUS "Found gloo include directories: ${Gloo_INCLUDE_DIRS}")
+
       add_library(gloo SHARED IMPORTED)
-      set_target_properties(gloo PROPERTIES IMPORTED_LOCATION ${Gloo_LIBRARY})
-      # need to use Gloo_INCLUDE_DIRS over third_party/gloo to find Gloo's auto-generated config.h
+      set_target_properties(gloo PROPERTIES
+        IMPORTED_LOCATION ${Gloo_LIBRARY}
+      )
       include_directories(BEFORE SYSTEM ${Gloo_INCLUDE_DIRS})
     endif()
-    set(BUILD_TEST ${__BUILD_TEST})
+
+    # Restore test/benchmark settings
+    set(BUILD_TEST      ${__BUILD_TEST})
     set(BUILD_BENCHMARK ${__BUILD_BENCHMARK})
 
-    # Add explicit dependency since NCCL is built from third_party.
-    # Without dependency, make -jN with N>1 can fail if the NCCL build
-    # hasn't finished when CUDA targets are linked.
+    # Ensure correct build ordering if using bundled NCCL
     if(NOT USE_SYSTEM_NCCL AND USE_NCCL AND NOT USE_ROCM)
       add_dependencies(gloo_cuda nccl_external)
     endif()
-    # Pick the right dependency depending on USE_CUDA
+
+    # Register Gloo for linking
     list(APPEND Caffe2_DEPENDENCY_LIBS gloo)
     if(USE_CUDA)
       list(APPEND Caffe2_CUDA_DEPENDENCY_LIBS gloo_cuda)
     elseif(USE_ROCM)
       list(APPEND Caffe2_HIP_DEPENDENCY_LIBS gloo_hip)
     endif()
+
     add_compile_options(-DCAFFE2_USE_GLOO)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Patch: install libuv runtime for Gloo transport on Windows
+    # ─────────────────────────────────────────────────────────────────────────
+    if(USE_LIBUV AND TARGET uv)
+      message(STATUS "Installing libuv (uv.dll) into ${TORCH_INSTALL_LIB_DIR}")
+      install(
+        TARGETS uv
+        RUNTIME  DESTINATION ${TORCH_INSTALL_LIB_DIR}  # uv.dll
+        OPTIONAL                                      # ignore if uv target missing
+      )
+    endif()
   endif()
 endif()
 
