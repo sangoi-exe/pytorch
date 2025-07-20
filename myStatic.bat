@@ -88,7 +88,7 @@ set PRINT_CMAKE_DEBUG_INFO=0
 set USE_SOURCE_DEBUG_ON_MOBILE=0
 
 REM --- Variaveis de Performance ---
-set MAX_JOBS=16
+set MAX_JOBS=8
 
 REM --- Arquiteturas CUDA ---
 set TORCH_CUDA_ARCH_LIST=8.6
