@@ -38,6 +38,7 @@
 #include <ATen/ops/_scaled_dot_product_attention_math_native.h>
 #include <ATen/ops/_scaled_dot_product_efficient_attention.h>
 #include <ATen/ops/_scaled_dot_product_flash_attention.h>
+#include <ATen/ops/_scaled_dot_product_flash_attention_sangoi.h>
 #include <ATen/ops/_scaled_dot_product_flash_attention_backward_native.h>
 #include <ATen/ops/_scaled_dot_product_flash_attention_native.h>
 #include <ATen/ops/_scaled_dot_product_cudnn_attention.h>
@@ -728,7 +729,7 @@ Tensor scaled_dot_product_attention(
         Tensor value_padded = pad_last_dim<8, false>(value);
         // We need to calculate the scale based off the OG head dim size
         auto og_scale = sdp::calculate_scale(query_, scale);
-        auto out_lse_softmax = at::_scaled_dot_product_flash_attention(
+        auto out_lse_softmax = at::_scaled_dot_product_flash_attention_sangoi(
             query_padded, key_padded, value_padded, dropout_p, is_causal, false /*return_debug_mask*/, og_scale.guard_float("attention.cpp", 735));
         return post_process_flash_output(std::get<0>(out_lse_softmax), og_size);
       }
