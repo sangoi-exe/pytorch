@@ -60,8 +60,6 @@ set(MKL_LIBRARIES
   CACHE STRING "" FORCE
 )
 
-
-
 # Build options / policies
 set(BUILD_TEST OFF CACHE BOOL "" FORCE)
 set(DC10_BUILD_MAIN_LIB ON CACHE BOOL "" FORCE)
