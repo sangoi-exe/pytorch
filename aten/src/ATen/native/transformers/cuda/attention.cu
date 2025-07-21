@@ -1102,11 +1102,16 @@ _flash_attention_forward(
   debug_attn_mask =
       return_debug_mask ? debug_attn_mask : at::empty({0}, query.options());
   return std::make_tuple(
-      std::move(output),
-      std::move(logsumexp),
-      std::move(philox_seed),
-      std::move(philox_offset),
-      std::move(debug_attn_mask));
+      std::move(output), // 1. Tensor output
+      std::move(logsumexp), // 2. Tensor logsumexp_or_softmax
+      cumulative_sequence_length_q.value_or(at::empty({0}, query.options())), // 3. Tensor cum_seq_q (converte optional)
+      cumulative_sequence_length_k.value_or(at::empty({0}, query.options())), // 4. Tensor cum_seq_k (converte optional)
+      c10::SymInt(max_seqlen_batch_q), // 5. SymInt max_q (converte int64_t)
+      c10::SymInt(max_seqlen_batch_k), // 6. SymInt max_k (converte int64_t)
+      std::move(philox_seed), // 7. Tensor rng_state
+      std::move(philox_offset), // 8. Tensor unused
+      std::move(debug_attn_mask) // 9. Tensor debug_attn_mask (seu softmax)
+  );
 
 #endif
   TORCH_CHECK(false, "USE_FLASH_ATTENTION was not enabled for build.")
