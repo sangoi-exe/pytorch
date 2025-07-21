@@ -30,8 +30,9 @@ ECHO [INFO] Definindo as flags de build do PyTorch...
 @REM --- Estrategia de Build e Runtime ---
 set CMAKE_PROJECT_INCLUDE=c:\pytorch\tweak_runtime.cmake
 set BUILD_SHARED_LIBS=1
-set BUILD_TEST=0
 set BUILD_BINARY=0
+set BUILD_TEST=0
+set BUILD_LAZY_TS_BACKEND=0
 set CAFFE2_USE_MSVC_STATIC_RUNTIME=0
 
 @REM --- Features Principais (CUDA) ---
@@ -39,7 +40,6 @@ set USE_CUDA=1
 set USE_NVRTC=1
 set USE_CUDNN=1
 set USE_STATIC_CUDNN=0
-set USE_CUDSS=1
 set USE_FLASH_ATTENTION=1
 
 @REM --- Features Principais (CPU & Geral) ---
@@ -47,14 +47,13 @@ set USE_LAPACK=1
 set USE_MIMALLOC=1
 set USE_MIMALLOC_ON_MKL=1
 set MI_BUILD_STATIC=0
-set BUILD_CUSTOM_PROTOBUF=0
-set USE_PER_OPERATOR_HEADERS=1
 set MKLProductDir=C:\Program Files (x86)\Intel\oneAPI
 
 @REM --- Features de Otimizacao/Compilador (A maioria irrelevante agora) ---
 set USE_GOLD_LINKER=0
 set MSVC_Z7_OVERRIDE=0
 set USE_NATIVE_ARCH=1
+set ATEN_AVX512_256=TRUE
 
 @REM --- Backends e Aceleradores Desativados ---
 set USE_MKLDNN=1
