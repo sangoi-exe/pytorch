@@ -1340,6 +1340,51 @@ if(USE_GLOO)
           )
         endif()
 
+        set(_libuv_import_lib_candidates "")
+        if(NOT "${_libuv_root}" STREQUAL "")
+          list(APPEND _libuv_import_lib_candidates
+            "${_libuv_root}/lib/uv.lib"
+            "${_libuv_root}/lib/libuv.lib"
+            "${_libuv_root}/lib/Release/uv.lib"
+            "${_libuv_root}/lib/Release/libuv.lib"
+            "${_libuv_root}/uv.lib"
+            "${_libuv_root}/libuv.lib"
+          )
+        endif()
+
+        if(DEFINED libuv_tmp_LIBRARY AND NOT "${libuv_tmp_LIBRARY}" STREQUAL "")
+          get_filename_component(_libuv_lib_dir "${libuv_tmp_LIBRARY}" DIRECTORY)
+          list(APPEND _libuv_import_lib_candidates
+            "${libuv_tmp_LIBRARY}"
+            "${_libuv_lib_dir}/uv.lib"
+            "${_libuv_lib_dir}/libuv.lib"
+            "${_libuv_lib_dir}/Release/uv.lib"
+            "${_libuv_lib_dir}/Release/libuv.lib"
+          )
+        endif()
+
+        list(REMOVE_DUPLICATES _libuv_import_lib_candidates)
+
+        set(_libuv_import_lib "")
+        foreach(_libuv_import_lib_candidate IN LISTS _libuv_import_lib_candidates)
+          if(EXISTS "${_libuv_import_lib_candidate}")
+            set(_libuv_import_lib "${_libuv_import_lib_candidate}")
+            break()
+          endif()
+        endforeach()
+
+        if(NOT "${_libuv_import_lib}" STREQUAL "")
+          list(APPEND Caffe2_DEPENDENCY_LIBS "${_libuv_import_lib}")
+        else()
+          string(JOIN "; " _libuv_import_lib_report ${_libuv_import_lib_candidates})
+          message(FATAL_ERROR
+            "USE_LIBUV is ON (WIN32) but uv import library could not be resolved from libuv_ROOT='${_libuv_root}'. "
+            "libuv_tmp_LIBRARY='${libuv_tmp_LIBRARY}'. "
+            "Checked import-lib candidates='${_libuv_import_lib_report}'. "
+            "Set libuv_ROOT to the libuv install prefix or disable USE_LIBUV."
+          )
+        endif()
+
         set(_libuv_dll "")
         foreach(_libuv_candidate IN LISTS _libuv_dll_candidates)
           if(EXISTS "${_libuv_candidate}")
