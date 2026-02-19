@@ -200,7 +200,7 @@ endif()
 # also add it to cmake/Summary.cmake so that the summary prints out the option
 # values.
 include(CMakeDependentOption)
-option(ATEN_NO_TEST "Do not build ATen test binaries" OFF)
+option(ATEN_NO_TEST "Do not build ATen test binaries" ON)
 option(BUILD_BINARY "Build C++ binaries" OFF)
 option(BUILD_CUSTOM_PROTOBUF
        "Build and use Caffe2's own protobuf under third_party" ON)
@@ -250,7 +250,7 @@ cmake_dependent_option(USE_CUSPARSELT "Use cuSPARSELt" ON "USE_CUDA" OFF)
 cmake_dependent_option(USE_CUDSS "Use cuDSS" ON "USE_CUDA" OFF)
 # USE_ROCM is guarded against in Dependencies.cmake because USE_ROCM is not properly defined here
 cmake_dependent_option(USE_CUFILE "Use cuFile" ON "USE_CUDA AND NOT WIN32" OFF)
-option(USE_FBGEMM "Use FBGEMM (quantized 8-bit server operators)" ON)
+option(USE_FBGEMM "Use FBGEMM (quantized 8-bit server operators)" OFF)
 option(USE_KINETO "Use Kineto profiling library" ON)
 option(USE_CUPTI_SO "Use CUPTI as a shared library" ON)
 option(USE_GFLAGS "Use GFLAGS" OFF)
@@ -300,7 +300,7 @@ if(NOT DEFINED USE_VULKAN)
   cmake_dependent_option(USE_VULKAN "Use Vulkan GPU backend" ON "ANDROID" OFF)
 endif()
 
-option(USE_SOURCE_DEBUG_ON_MOBILE "Enable" ON)
+option(USE_SOURCE_DEBUG_ON_MOBILE "Enable" OFF)
 option(USE_LITE_INTERPRETER_PROFILER "Enable" ON)
 cmake_dependent_option(
   USE_LITE_AOTI "Include AOTI sources" OFF
@@ -562,7 +562,7 @@ if(MSVC)
   # https://learn.microsoft.com/en-us/cpp/build/reference/zc-cplusplus?view=msvc-170
   # * https://en.cppreference.com/w/cpp/preprocessor/replace#Predefined_macros
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:__cplusplus")
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler  /Zc:__cplusplus")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler /Zc:__cplusplus")
 
   set(CMAKE_NINJA_CMCLDEPS_RC OFF)
   if(MSVC_Z7_OVERRIDE)
@@ -873,7 +873,7 @@ cmake_dependent_option(
   "Whether to build the flash_attention kernel for scaled dot product attention.\
   Will be disabled if not supported by the platform"
   ON
-  "USE_CUDA OR USE_ROCM;NOT MSVC"
+  "USE_CUDA OR USE_ROCM"
   OFF)
 
 cmake_dependent_option(

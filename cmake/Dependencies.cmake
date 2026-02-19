@@ -1,5 +1,11 @@
 # RPATH stuff
 # see https://cmake.org/Wiki/CMake_RPATH_handling
+
+if(NOT DEFINED TORCH_INSTALL_LIB_DIR)
+  set(TORCH_INSTALL_LIB_DIR "lib"
+      CACHE PATH "Directory where torch runtime DLLs are installed" FORCE)
+endif()
+message(STATUS "TORCH_INSTALL_LIB_DIR = ${TORCH_INSTALL_LIB_DIR}")
 if(APPLE)
   set(CMAKE_MACOSX_RPATH ON)
   set(_rpath_portable_origin "@loader_path")
@@ -900,19 +906,39 @@ endif()
 if(USE_OPENMP AND NOT TARGET caffe2::openmp)
   include(${CMAKE_CURRENT_LIST_DIR}/Modules/FindOpenMP.cmake)
   if(OPENMP_FOUND)
-    message(STATUS "Adding OpenMP CXX_FLAGS: " ${OpenMP_CXX_FLAGS})
+    message(STATUS "Adding OpenMP flags: C='${OpenMP_C_FLAGS}' CXX='${OpenMP_CXX_FLAGS}'")
     if(APPLE AND USE_MPS)
       string(APPEND CMAKE_OBJCXX_FLAGS " ${OpenMP_CXX_FLAGS}")
     endif()
     if(OpenMP_CXX_LIBRARIES)
       message(STATUS "Will link against OpenMP libraries: ${OpenMP_CXX_LIBRARIES}")
     endif()
+
     add_library(caffe2::openmp INTERFACE IMPORTED)
+    target_compile_options(caffe2::openmp INTERFACE
+      ${OpenMP_C_FLAGS}
+      ${OpenMP_CXX_FLAGS}
+    )
     target_link_libraries(caffe2::openmp INTERFACE OpenMP::OpenMP_CXX)
     list(APPEND Caffe2_DEPENDENCY_LIBS caffe2::openmp)
+
     if(MSVC AND OpenMP_CXX_LIBRARIES MATCHES ".*libiomp5md\\.lib.*")
       target_compile_definitions(caffe2::openmp INTERFACE _OPENMP_NOFORCE_MANIFEST)
       target_link_options(caffe2::openmp INTERFACE "/NODEFAULTLIB:vcomp")
+
+      if(NOT DEFINED INTEL_OMP_BIN_DIR)
+        set(INTEL_OMP_BIN_DIR
+          "C:/Program Files (x86)/Intel/oneAPI/compiler/2025.2/bin"
+          CACHE PATH "Directory containing libiomp5md.dll"
+        )
+      endif()
+      set(_omp_dll "${INTEL_OMP_BIN_DIR}/libiomp5md.dll")
+      if(EXISTS "${_omp_dll}")
+        message(STATUS "Installing Intel OpenMP DLL: ${_omp_dll}")
+        install(FILES "${_omp_dll}" DESTINATION ${TORCH_INSTALL_LIB_DIR} OPTIONAL)
+      else()
+        message(WARNING "Intel OpenMP DLL not found at ${_omp_dll}; skipping")
+      endif()
     endif()
   else()
     message(WARNING "Not compiling with OpenMP. Suppress this warning with -DUSE_OPENMP=OFF")
@@ -1185,7 +1211,7 @@ if(USE_GLOO)
       set(ENV{GLOO_ROCM_ARCH} "${PYTORCH_ROCM_ARCH}")
     endif()
     if(NOT USE_SYSTEM_GLOO)
-      if(USE_DISTRIBUED AND USE_TENSORPIPE)
+      if(USE_DISTRIBUTED AND USE_TENSORPIPE)
         get_target_property(_include_dirs uv_a INCLUDE_DIRECTORIES)
         set_target_properties(uv_a PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_include_dirs}")
       endif()
@@ -1241,6 +1267,66 @@ if(USE_GLOO)
       list(APPEND Caffe2_HIP_DEPENDENCY_LIBS gloo_hip)
     endif()
     add_compile_options(-DCAFFE2_USE_GLOO)
+    if(USE_LIBUV)
+      if(NOT USE_TENSORPIPE)
+        add_compile_options(-DTORCH_USE_LIBUV)
+      endif()
+
+      if(WIN32)
+        set(_libuv_root "${libuv_ROOT}")
+        if("${_libuv_root}" STREQUAL "" AND DEFINED ENV{libuv_ROOT})
+          set(_libuv_root "$ENV{libuv_ROOT}")
+        endif()
+
+        if("${_libuv_root}" MATCHES "\\.(lib|dll)$")
+          get_filename_component(_libuv_root "${_libuv_root}" DIRECTORY)
+        endif()
+
+        set(_libuv_dll_candidates "")
+        if(NOT "${_libuv_root}" STREQUAL "")
+          list(APPEND _libuv_dll_candidates
+            "${_libuv_root}/bin/uv.dll"
+            "${_libuv_root}/lib/uv.dll"
+            "${_libuv_root}/lib/Release/uv.dll"
+            "${_libuv_root}/Release/uv.dll"
+            "${_libuv_root}/../bin/uv.dll"
+          )
+        endif()
+
+        if(DEFINED libuv_tmp_LIBRARY AND NOT "${libuv_tmp_LIBRARY}" STREQUAL "")
+          get_filename_component(_libuv_lib_dir "${libuv_tmp_LIBRARY}" DIRECTORY)
+          list(APPEND _libuv_dll_candidates
+            "${_libuv_lib_dir}/uv.dll"
+            "${_libuv_lib_dir}/../bin/uv.dll"
+            "${_libuv_lib_dir}/../Release/uv.dll"
+            "${_libuv_lib_dir}/../../bin/uv.dll"
+          )
+        endif()
+
+        list(REMOVE_DUPLICATES _libuv_dll_candidates)
+
+        set(_libuv_dll "")
+        foreach(_libuv_candidate IN LISTS _libuv_dll_candidates)
+          if(EXISTS "${_libuv_candidate}")
+            set(_libuv_dll "${_libuv_candidate}")
+            break()
+          endif()
+        endforeach()
+
+        if(NOT "${_libuv_dll}" STREQUAL "")
+          message(STATUS "Installing ${_libuv_dll} into ${TORCH_INSTALL_LIB_DIR}")
+          install(FILES "${_libuv_dll}" DESTINATION "${TORCH_INSTALL_LIB_DIR}")
+        else()
+          string(JOIN "; " _libuv_candidate_report ${_libuv_dll_candidates})
+          message(FATAL_ERROR
+            "USE_LIBUV is ON (WIN32) but uv.dll could not be resolved from libuv_ROOT='${_libuv_root}'. "
+            "libuv_tmp_LIBRARY='${libuv_tmp_LIBRARY}'. "
+            "Checked candidates='${_libuv_candidate_report}'. "
+            "Set libuv_ROOT to the libuv install prefix or disable USE_LIBUV."
+          )
+        endif()
+      endif()
+    endif()
   endif()
 endif()
 
