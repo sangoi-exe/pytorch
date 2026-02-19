@@ -15,7 +15,11 @@ IF %ERRORLEVEL% NEQ 0 (
 )
 
 ECHO [INFO] Configurando o ambiente do Python...
-set "PYTHON_VENV_PATH=C:\torch\venv"
+set "PYTHON_VENV_PATH=C:\Users\lucas\OneDrive\Documentos\stable-diffusion-webui-codex\.venv"
+IF NOT EXIST "%PYTHON_VENV_PATH%\Scripts\activate.bat" (
+    ECHO [ERRO] Virtualenv nao encontrado em %PYTHON_VENV_PATH%. Abortando.
+    GOTO :EOF
+)
 call %PYTHON_VENV_PATH%\Scripts\activate.bat
 IF %ERRORLEVEL% NEQ 0 (
     ECHO [ERRO] Falha ao ativar o virtualenv em %PYTHON_VENV_PATH%. Abortando.
@@ -95,7 +99,11 @@ set CMAKE_CUDA_ARCHITECTURES=OFF
 ECHO [INFO] Ambiente configurado. Iniciando o build...
 ECHO ==================================================================
 
-@@REM --- Comando de execucao ---
-pip wheel . -v --no-build-isolation -w dist/
+@REM --- Build do wheel do torch ---
+python -m pip wheel . -v --no-build-isolation -w dist/
+IF %ERRORLEVEL% NEQ 0 (
+    ECHO [ERRO] Falha ao gerar wheel do torch. Abortando.
+    GOTO :EOF
+)
 
 ECHO [INFO] Processo de build finalizado.
