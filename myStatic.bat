@@ -122,6 +122,22 @@ IF ERRORLEVEL 1 (
     )
 )
 
+@REM --- Dependencia Python exigida pelo setup.py (check_pydep) ---
+"%PYTHON_EXE%" -c "import yaml" >NUL 2>&1
+IF ERRORLEVEL 1 (
+    ECHO [INFO] Modulo yaml ausente. Instalando pyyaml...
+    "%PYTHON_EXE%" -m pip install --upgrade pyyaml
+    IF ERRORLEVEL 1 (
+        ECHO [ERRO] Falha ao instalar pyyaml no venv local. Abortando.
+        GOTO :FAIL
+    )
+    "%PYTHON_EXE%" -c "import yaml" >NUL 2>&1
+    IF ERRORLEVEL 1 (
+        ECHO [ERRO] Modulo yaml continua indisponivel apos instalar pyyaml. Abortando.
+        GOTO :FAIL
+    )
+)
+
 @REM ==================================================================
 @REM ==               CONFIGURACOES DE BUILD DO PYTORCH              ==
 @REM ==================================================================
