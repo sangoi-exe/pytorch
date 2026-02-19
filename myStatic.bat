@@ -290,6 +290,11 @@ IF NOT EXIST "%SCRIPT_DIR%third_party\psimd\CMakeLists.txt" (
     )
 )
 
+call :VERIFY_REQUIRED_SUBMODULE_FILES
+IF ERRORLEVEL 1 (
+    EXIT /B 1
+)
+
 EXIT /B 0
 
 :REPAIR_PSIMD_SUBMODULE
@@ -318,6 +323,38 @@ IF NOT EXIST "%SCRIPT_DIR%third_party\psimd\CMakeLists.txt" (
     EXIT /B 1
 )
 EXIT /B 0
+
+:VERIFY_REQUIRED_SUBMODULE_FILES
+for /f "tokens=2" %%P in ('git config -f .gitmodules --get-regexp "^submodule\\..*\\.path$"') do (
+    call :CHECK_SUBMODULE_PATH "%%P"
+    IF ERRORLEVEL 1 (
+        EXIT /B 1
+    )
+)
+
+IF NOT EXIST "%SCRIPT_DIR%third_party\fbgemm\external\asmjit\CMakeLists.txt" (
+    ECHO [ERRO] Submodule inconsistente: third_party\fbgemm\external\asmjit (faltando CMakeLists.txt).
+    EXIT /B 1
+)
+
+EXIT /B 0
+
+:CHECK_SUBMODULE_PATH
+set "MODULE_REL=%~1"
+set "MODULE_REL=%MODULE_REL:/=\%"
+set "MODULE_DIR=%SCRIPT_DIR%%MODULE_REL%"
+
+IF EXIST "%MODULE_DIR%\CMakeLists.txt" EXIT /B 0
+IF EXIST "%MODULE_DIR%\Makefile" EXIT /B 0
+IF EXIST "%MODULE_DIR%\setup.py" EXIT /B 0
+IF EXIST "%MODULE_DIR%\LICENSE" EXIT /B 0
+IF EXIST "%MODULE_DIR%\LICENSE.md" EXIT /B 0
+IF EXIST "%MODULE_DIR%\LICENSE.txt" EXIT /B 0
+
+ECHO [ERRO] Submodule inconsistente: %MODULE_REL%
+ECHO [ERRO] Nenhum sentinel encontrado em %MODULE_DIR%
+ECHO [ERRO] Esperado ao menos um de: CMakeLists.txt, Makefile, setup.py, LICENSE, LICENSE.md, LICENSE.txt
+EXIT /B 1
 
 :FAIL
 popd >NUL 2>&1
