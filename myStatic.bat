@@ -16,14 +16,36 @@ IF %ERRORLEVEL% NEQ 0 (
 
 ECHO [INFO] Configurando o ambiente do Python...
 set "PYTHON_VENV_PATH=C:\Users\lucas\OneDrive\Documentos\stable-diffusion-webui-codex\.venv"
+set "PYTHON_EXE=%PYTHON_VENV_PATH%\Scripts\python.exe"
 IF NOT EXIST "%PYTHON_VENV_PATH%\Scripts\activate.bat" (
     ECHO [ERRO] Virtualenv nao encontrado em %PYTHON_VENV_PATH%. Abortando.
+    GOTO :EOF
+)
+IF NOT EXIST "%PYTHON_EXE%" (
+    ECHO [ERRO] Python nao encontrado em %PYTHON_EXE%. Abortando.
     GOTO :EOF
 )
 call %PYTHON_VENV_PATH%\Scripts\activate.bat
 IF %ERRORLEVEL% NEQ 0 (
     ECHO [ERRO] Falha ao ativar o virtualenv em %PYTHON_VENV_PATH%. Abortando.
     GOTO :EOF
+)
+
+@REM --- Bootstrap de pip para venvs criados via uv (podem vir sem pip) ---
+"%PYTHON_EXE%" -m pip --version >NUL 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    ECHO [INFO] pip nao encontrado no venv. Tentando bootstrap com ensurepip...
+    "%PYTHON_EXE%" -m ensurepip --upgrade
+    IF %ERRORLEVEL% NEQ 0 (
+        ECHO [ERRO] Falha ao bootstrap do pip via ensurepip.
+        ECHO [ERRO] Rode manualmente: "%PYTHON_EXE%" -m ensurepip --upgrade
+        GOTO :EOF
+    )
+    "%PYTHON_EXE%" -m pip --version >NUL 2>&1
+    IF %ERRORLEVEL% NEQ 0 (
+        ECHO [ERRO] pip continua indisponivel apos ensurepip. Abortando.
+        GOTO :EOF
+    )
 )
 
 @REM ==================================================================
@@ -100,7 +122,7 @@ ECHO [INFO] Ambiente configurado. Iniciando o build...
 ECHO ==================================================================
 
 @REM --- Build do wheel do torch ---
-python -m pip wheel . -v --no-build-isolation -w dist/
+"%PYTHON_EXE%" -m pip wheel . -v --no-build-isolation -w dist/
 IF %ERRORLEVEL% NEQ 0 (
     ECHO [ERRO] Falha ao gerar wheel do torch. Abortando.
     GOTO :EOF
