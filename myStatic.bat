@@ -157,6 +157,19 @@ IF ERRORLEVEL 1 (
     )
 )
 
+@REM --- Dependencia de codegen usada por torchgen (assert_never/Self) ---
+ECHO [INFO] Garantindo typing-extensions>=4.10.0...
+"%PYTHON_EXE%" -m pip install --upgrade "typing-extensions>=4.10.0"
+IF ERRORLEVEL 1 (
+    ECHO [ERRO] Falha ao instalar typing-extensions no venv local. Abortando.
+    GOTO :FAIL
+)
+"%PYTHON_EXE%" -c "import importlib.metadata as m,re,sys; v=m.version('typing-extensions'); p=tuple(int(x) for x in re.findall(r'[0-9]+', v)[:3]); sys.exit(0 if p >= (4,10,0) else 1)" >NUL 2>&1
+IF ERRORLEVEL 1 (
+    ECHO [ERRO] typing-extensions com versao invalida no venv local. Esperado >= 4.10.0.
+    GOTO :FAIL
+)
+
 @REM ==================================================================
 @REM ==               CONFIGURACOES DE BUILD DO PYTORCH              ==
 @REM ==================================================================
