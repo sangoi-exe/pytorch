@@ -210,13 +210,30 @@ ECHO [INFO] Validando submodules...
 set "SUBMODULE_STATUS_FILE=%TEMP%\torch-submodules-%RANDOM%%RANDOM%.txt"
 git submodule status --recursive > "%SUBMODULE_STATUS_FILE%" 2>&1
 IF ERRORLEVEL 1 (
-    ECHO [ERRO] Falha ao executar 'git submodule status --recursive'.
+    ECHO [WARN] Falha ao executar 'git submodule status --recursive'. Tentando reparo forcado de psimd...
+    call :REPAIR_PSIMD_SUBMODULE
+    IF ERRORLEVEL 1 (
+        ECHO [ERRO] Falha ao executar 'git submodule status --recursive' e reparo de psimd nao resolveu.
+        IF EXIST "%SUBMODULE_STATUS_FILE%" type "%SUBMODULE_STATUS_FILE%"
+        IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+        EXIT /B 1
+    )
+    git submodule status --recursive > "%SUBMODULE_STATUS_FILE%" 2>&1
+    IF ERRORLEVEL 1 (
+        ECHO [ERRO] Falha persistente em 'git submodule status --recursive' apos reparo de psimd.
+        IF EXIST "%SUBMODULE_STATUS_FILE%" type "%SUBMODULE_STATUS_FILE%"
+        IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+        EXIT /B 1
+    )
+)
+
+findstr /R "^[\-+U]" "%SUBMODULE_STATUS_FILE%" >NUL
+IF ERRORLEVEL 2 (
+    ECHO [ERRO] Falha ao interpretar o status dos submodules com findstr.
     IF EXIST "%SUBMODULE_STATUS_FILE%" type "%SUBMODULE_STATUS_FILE%"
     IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
     EXIT /B 1
 )
-
-findstr /R "^[\-+U]" "%SUBMODULE_STATUS_FILE%" >NUL
 IF NOT ERRORLEVEL 1 (
     ECHO [INFO] Detectados submodules ausentes/desalinhados. Executando sync/update...
     git submodule sync --recursive
@@ -227,9 +244,19 @@ IF NOT ERRORLEVEL 1 (
     )
     git submodule update --init --recursive
     IF ERRORLEVEL 1 (
-        ECHO [ERRO] Falha em 'git submodule update --init --recursive'.
-        IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
-        EXIT /B 1
+        ECHO [WARN] Falha em 'git submodule update --init --recursive'. Tentando reparo forcado de psimd...
+        call :REPAIR_PSIMD_SUBMODULE
+        IF ERRORLEVEL 1 (
+            ECHO [ERRO] Falha em 'git submodule update --init --recursive' e reparo de psimd nao resolveu.
+            IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+            EXIT /B 1
+        )
+        git submodule update --init --recursive
+        IF ERRORLEVEL 1 (
+            ECHO [ERRO] Falha persistente em 'git submodule update --init --recursive' apos reparo de psimd.
+            IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+            EXIT /B 1
+        )
     )
     git submodule status --recursive > "%SUBMODULE_STATUS_FILE%" 2>&1
     IF ERRORLEVEL 1 (
@@ -239,6 +266,12 @@ IF NOT ERRORLEVEL 1 (
         EXIT /B 1
     )
     findstr /R "^[\-+U]" "%SUBMODULE_STATUS_FILE%" >NUL
+    IF ERRORLEVEL 2 (
+        ECHO [ERRO] Falha ao interpretar o status revalidado dos submodules com findstr.
+        IF EXIST "%SUBMODULE_STATUS_FILE%" type "%SUBMODULE_STATUS_FILE%"
+        IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+        EXIT /B 1
+    )
     IF NOT ERRORLEVEL 1 (
         ECHO [ERRO] Ainda existem submodules ausentes/desalinhados apos sync/update:
         type "%SUBMODULE_STATUS_FILE%"
