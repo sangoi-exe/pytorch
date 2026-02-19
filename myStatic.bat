@@ -10,7 +10,7 @@ setlocal
 
 ECHO [INFO] Configurando o ambiente do Visual Studio...
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     ECHO [ERRO] Falha ao configurar o ambiente do MSVC. Abortando.
     GOTO :FAIL
 )
@@ -44,7 +44,7 @@ IF /I NOT "%BOOTSTRAP_PYTHON_VERSION%"=="%EXPECTED_PYTHON_VERSION%" (
 IF NOT EXIST "%PYTHON_EXE%" (
     ECHO [INFO] Virtualenv local nao encontrado em %LOCAL_VENV_PATH%. Criando...
     "%BOOTSTRAP_PYTHON%" -m venv "%LOCAL_VENV_PATH%"
-    IF %ERRORLEVEL% NEQ 0 (
+    IF ERRORLEVEL 1 (
         ECHO [ERRO] Falha ao criar virtualenv local em %LOCAL_VENV_PATH%. Abortando.
         GOTO :FAIL
     )
@@ -56,7 +56,7 @@ IF NOT EXIST "%ACTIVATE_BAT%" (
 )
 
 call "%ACTIVATE_BAT%"
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     ECHO [ERRO] Falha ao ativar o virtualenv local em %LOCAL_VENV_PATH%. Abortando.
     GOTO :FAIL
 )
@@ -80,16 +80,16 @@ IF /I NOT "%LOCAL_PYTHON_VERSION%"=="%EXPECTED_PYTHON_VERSION%" (
 
 @REM --- Bootstrap de pip para venvs criados via uv (podem vir sem pip) ---
 "%PYTHON_EXE%" -m pip --version >NUL 2>&1
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     ECHO [INFO] pip nao encontrado no venv. Tentando bootstrap com ensurepip...
     "%PYTHON_EXE%" -m ensurepip --upgrade
-    IF %ERRORLEVEL% NEQ 0 (
+    IF ERRORLEVEL 1 (
         ECHO [ERRO] Falha ao bootstrap do pip via ensurepip.
         ECHO [ERRO] Rode manualmente: "%PYTHON_EXE%" -m ensurepip --upgrade
         GOTO :FAIL
     )
     "%PYTHON_EXE%" -m pip --version >NUL 2>&1
-    IF %ERRORLEVEL% NEQ 0 (
+    IF ERRORLEVEL 1 (
         ECHO [ERRO] pip continua indisponivel apos ensurepip. Abortando.
         GOTO :FAIL
     )
@@ -97,15 +97,15 @@ IF %ERRORLEVEL% NEQ 0 (
 
 @REM --- Bootstrap do backend de build (pyproject.toml -> setuptools.build_meta) ---
 "%PYTHON_EXE%" -c "import setuptools.build_meta" >NUL 2>&1
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     ECHO [INFO] Backend setuptools.build_meta indisponivel. Instalando setuptools e wheel...
     "%PYTHON_EXE%" -m pip install --upgrade setuptools wheel
-    IF %ERRORLEVEL% NEQ 0 (
+    IF ERRORLEVEL 1 (
         ECHO [ERRO] Falha ao instalar setuptools/wheel no venv local. Abortando.
         GOTO :FAIL
     )
     "%PYTHON_EXE%" -c "import setuptools.build_meta" >NUL 2>&1
-    IF %ERRORLEVEL% NEQ 0 (
+    IF ERRORLEVEL 1 (
         ECHO [ERRO] Backend setuptools.build_meta continua indisponivel apos bootstrap. Abortando.
         GOTO :FAIL
     )
@@ -186,7 +186,7 @@ ECHO ==================================================================
 
 @REM --- Build do wheel do torch ---
 "%PYTHON_EXE%" -m pip wheel . -v --no-build-isolation -w dist/
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     ECHO [ERRO] Falha ao gerar wheel do torch. Abortando.
     GOTO :FAIL
 )
