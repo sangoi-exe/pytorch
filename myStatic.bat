@@ -15,8 +15,19 @@ IF ERRORLEVEL 1 (
     GOTO :FAIL
 )
 
-ECHO [INFO] Configurando o ambiente do Python...
 set "SCRIPT_DIR=%~dp0"
+pushd "%SCRIPT_DIR%"
+IF ERRORLEVEL 1 (
+    ECHO [ERRO] Falha ao acessar o diretorio do script: %SCRIPT_DIR%
+    GOTO :FAIL
+)
+
+call :ENSURE_SUBMODULES_READY
+IF ERRORLEVEL 1 (
+    GOTO :FAIL
+)
+
+ECHO [INFO] Configurando o ambiente do Python...
 set "LOCAL_VENV_PATH=%SCRIPT_DIR%.venv"
 set "ACTIVATE_BAT=%LOCAL_VENV_PATH%\Scripts\activate.bat"
 set "PYTHON_EXE=%LOCAL_VENV_PATH%\Scripts\python.exe"
@@ -194,8 +205,91 @@ IF ERRORLEVEL 1 (
 ECHO [INFO] Processo de build finalizado.
 GOTO :SUCCESS
 
+:ENSURE_SUBMODULES_READY
+ECHO [INFO] Validando submodules...
+set "SUBMODULE_STATUS_FILE=%TEMP%\torch-submodules-%RANDOM%%RANDOM%.txt"
+git submodule status --recursive > "%SUBMODULE_STATUS_FILE%" 2>&1
+IF ERRORLEVEL 1 (
+    ECHO [ERRO] Falha ao executar 'git submodule status --recursive'.
+    IF EXIST "%SUBMODULE_STATUS_FILE%" type "%SUBMODULE_STATUS_FILE%"
+    IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+    EXIT /B 1
+)
+
+findstr /R "^[\-+U]" "%SUBMODULE_STATUS_FILE%" >NUL
+IF NOT ERRORLEVEL 1 (
+    ECHO [INFO] Detectados submodules ausentes/desalinhados. Executando sync/update...
+    git submodule sync --recursive
+    IF ERRORLEVEL 1 (
+        ECHO [ERRO] Falha em 'git submodule sync --recursive'.
+        IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+        EXIT /B 1
+    )
+    git submodule update --init --recursive
+    IF ERRORLEVEL 1 (
+        ECHO [ERRO] Falha em 'git submodule update --init --recursive'.
+        IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+        EXIT /B 1
+    )
+    git submodule status --recursive > "%SUBMODULE_STATUS_FILE%" 2>&1
+    IF ERRORLEVEL 1 (
+        ECHO [ERRO] Falha ao revalidar estado dos submodules.
+        IF EXIST "%SUBMODULE_STATUS_FILE%" type "%SUBMODULE_STATUS_FILE%"
+        IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+        EXIT /B 1
+    )
+    findstr /R "^[\-+U]" "%SUBMODULE_STATUS_FILE%" >NUL
+    IF NOT ERRORLEVEL 1 (
+        ECHO [ERRO] Ainda existem submodules ausentes/desalinhados apos sync/update:
+        type "%SUBMODULE_STATUS_FILE%"
+        IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+        EXIT /B 1
+    )
+)
+
+IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+
+IF NOT EXIST "%SCRIPT_DIR%third_party\psimd\CMakeLists.txt" (
+    ECHO [INFO] Submodule psimd inconsistente. Tentando reparo forcado...
+    call :REPAIR_PSIMD_SUBMODULE
+    IF ERRORLEVEL 1 (
+        EXIT /B 1
+    )
+)
+
+EXIT /B 0
+
+:REPAIR_PSIMD_SUBMODULE
+git submodule deinit -f -- third_party/psimd >NUL 2>&1
+IF EXIST ".git\modules\third_party\NNPACK_deps\psimd" rmdir /S /Q ".git\modules\third_party\NNPACK_deps\psimd"
+IF EXIST "third_party\psimd" rmdir /S /Q "third_party\psimd"
+
+git submodule sync --recursive third_party/psimd
+IF ERRORLEVEL 1 (
+    ECHO [ERRO] Falha em 'git submodule sync --recursive third_party/psimd'.
+    EXIT /B 1
+)
+git submodule update --init --recursive -- third_party/psimd
+IF ERRORLEVEL 1 (
+    ECHO [ERRO] Falha em 'git submodule update --init --recursive -- third_party/psimd'.
+    EXIT /B 1
+)
+IF NOT EXIST "%SCRIPT_DIR%third_party\psimd\CMakeLists.txt" (
+    ECHO [ERRO] psimd segue inconsistente apos reparo forcado.
+    ECHO [ERRO] Rode manualmente:
+    ECHO [ERRO]   git submodule deinit -f -- third_party/psimd
+    ECHO [ERRO]   rmdir /S /Q .git\modules\third_party\NNPACK_deps\psimd
+    ECHO [ERRO]   rmdir /S /Q third_party\psimd
+    ECHO [ERRO]   git submodule sync --recursive third_party/psimd
+    ECHO [ERRO]   git submodule update --init --recursive -- third_party/psimd
+    EXIT /B 1
+)
+EXIT /B 0
+
 :FAIL
+popd >NUL 2>&1
 EXIT /B 1
 
 :SUCCESS
+popd >NUL 2>&1
 EXIT /B 0
