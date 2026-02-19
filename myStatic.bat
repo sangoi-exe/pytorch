@@ -291,7 +291,7 @@ IF NOT EXIST "%SCRIPT_DIR%third_party\psimd\CMakeLists.txt" (
 )
 
 IF NOT EXIST "%SCRIPT_DIR%third_party\fbgemm\external\asmjit\CMakeLists.txt" (
-    ECHO [ERRO] Submodule inconsistente: third_party\fbgemm\external\asmjit (faltando CMakeLists.txt).
+    ECHO [ERRO] Submodule inconsistente: third_party\fbgemm\external\asmjit - faltando CMakeLists.txt.
     EXIT /B 1
 )
 
