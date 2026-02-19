@@ -1,4 +1,5 @@
 @echo off
+setlocal
 @REM ==================================================================
 @REM ==               SCRIPT DE BUILD PARA PYTORCH ESTATICO            ==
 @REM ==================================================================
@@ -11,7 +12,7 @@ ECHO [INFO] Configurando o ambiente do Visual Studio...
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 IF %ERRORLEVEL% NEQ 0 (
     ECHO [ERRO] Falha ao configurar o ambiente do MSVC. Abortando.
-    GOTO :EOF
+    GOTO :FAIL
 )
 
 ECHO [INFO] Configurando o ambiente do Python...
@@ -25,14 +26,19 @@ set "EXPECTED_PYTHON_VERSION=3.12.10"
 IF NOT EXIST "%BOOTSTRAP_PYTHON%" (
     ECHO [ERRO] Python bootstrap nao encontrado em %BOOTSTRAP_PYTHON%.
     ECHO [ERRO] Ajuste BOOTSTRAP_PYTHON no myStatic.bat para um Python %EXPECTED_PYTHON_VERSION%.
-    GOTO :EOF
+    GOTO :FAIL
 )
 
+set "BOOTSTRAP_PYTHON_VERSION="
 for /f "tokens=2 delims= " %%V in ('"%BOOTSTRAP_PYTHON%" -V 2^>^&1') do set "BOOTSTRAP_PYTHON_VERSION=%%V"
+IF NOT DEFINED BOOTSTRAP_PYTHON_VERSION (
+    ECHO [ERRO] Nao foi possivel detectar a versao do Python bootstrap em %BOOTSTRAP_PYTHON%.
+    GOTO :FAIL
+)
 IF /I NOT "%BOOTSTRAP_PYTHON_VERSION%"=="%EXPECTED_PYTHON_VERSION%" (
     ECHO [ERRO] Python de bootstrap invalido: encontrado %BOOTSTRAP_PYTHON_VERSION%, esperado %EXPECTED_PYTHON_VERSION%.
     ECHO [ERRO] Ajuste BOOTSTRAP_PYTHON para um Python %EXPECTED_PYTHON_VERSION% e tente novamente.
-    GOTO :EOF
+    GOTO :FAIL
 )
 
 IF NOT EXIST "%PYTHON_EXE%" (
@@ -40,31 +46,36 @@ IF NOT EXIST "%PYTHON_EXE%" (
     "%BOOTSTRAP_PYTHON%" -m venv "%LOCAL_VENV_PATH%"
     IF %ERRORLEVEL% NEQ 0 (
         ECHO [ERRO] Falha ao criar virtualenv local em %LOCAL_VENV_PATH%. Abortando.
-        GOTO :EOF
+        GOTO :FAIL
     )
 )
 
 IF NOT EXIST "%ACTIVATE_BAT%" (
     ECHO [ERRO] activate.bat nao encontrado em %ACTIVATE_BAT%. Abortando.
-    GOTO :EOF
+    GOTO :FAIL
 )
 
 call "%ACTIVATE_BAT%"
 IF %ERRORLEVEL% NEQ 0 (
     ECHO [ERRO] Falha ao ativar o virtualenv local em %LOCAL_VENV_PATH%. Abortando.
-    GOTO :EOF
+    GOTO :FAIL
 )
 
 IF NOT EXIST "%PYTHON_EXE%" (
     ECHO [ERRO] Python nao encontrado em %PYTHON_EXE%. Abortando.
-    GOTO :EOF
+    GOTO :FAIL
 )
 
+set "LOCAL_PYTHON_VERSION="
 for /f "tokens=2 delims= " %%V in ('"%PYTHON_EXE%" -V 2^>^&1') do set "LOCAL_PYTHON_VERSION=%%V"
+IF NOT DEFINED LOCAL_PYTHON_VERSION (
+    ECHO [ERRO] Nao foi possivel detectar a versao do Python local em %PYTHON_EXE%.
+    GOTO :FAIL
+)
 IF /I NOT "%LOCAL_PYTHON_VERSION%"=="%EXPECTED_PYTHON_VERSION%" (
     ECHO [ERRO] Virtualenv local com Python invalido: encontrado %LOCAL_PYTHON_VERSION%, esperado %EXPECTED_PYTHON_VERSION%.
     ECHO [ERRO] Remova %LOCAL_VENV_PATH% e execute novamente para recriar com a versao correta.
-    GOTO :EOF
+    GOTO :FAIL
 )
 
 @REM --- Bootstrap de pip para venvs criados via uv (podem vir sem pip) ---
@@ -75,12 +86,12 @@ IF %ERRORLEVEL% NEQ 0 (
     IF %ERRORLEVEL% NEQ 0 (
         ECHO [ERRO] Falha ao bootstrap do pip via ensurepip.
         ECHO [ERRO] Rode manualmente: "%PYTHON_EXE%" -m ensurepip --upgrade
-        GOTO :EOF
+        GOTO :FAIL
     )
     "%PYTHON_EXE%" -m pip --version >NUL 2>&1
     IF %ERRORLEVEL% NEQ 0 (
         ECHO [ERRO] pip continua indisponivel apos ensurepip. Abortando.
-        GOTO :EOF
+        GOTO :FAIL
     )
 )
 
@@ -161,7 +172,14 @@ ECHO ==================================================================
 "%PYTHON_EXE%" -m pip wheel . -v --no-build-isolation -w dist/
 IF %ERRORLEVEL% NEQ 0 (
     ECHO [ERRO] Falha ao gerar wheel do torch. Abortando.
-    GOTO :EOF
+    GOTO :FAIL
 )
 
 ECHO [INFO] Processo de build finalizado.
+GOTO :SUCCESS
+
+:FAIL
+EXIT /B 1
+
+:SUCCESS
+EXIT /B 0
