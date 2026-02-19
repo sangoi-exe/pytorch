@@ -209,36 +209,29 @@ endif()
 # also add it to cmake/Summary.cmake so that the summary prints out the option
 # values.
 include(CMakeDependentOption)
-option(ATEN_NO_TEST "Do not build ATen test binaries" OFF)
+option(ATEN_NO_TEST "Do not build ATen test binaries" ON)
 option(BUILD_BINARY "Build C++ binaries" OFF)
-option(BUILD_CUSTOM_PROTOBUF
-       "Build and use Caffe2's own protobuf under third_party" ON)
+option(BUILD_CUSTOM_PROTOBUF "Build and use Caffe2's own protobuf under third_party" ON)
 option(BUILD_PYTHON "Build Python binaries" ON)
 option(BUILD_LITE_INTERPRETER "Master flag to build Lite Interpreter" OFF)
 option(BUILD_SHARED_LIBS "Build libcaffe2.so" ON)
 cmake_dependent_option(
   CAFFE2_LINK_LOCAL_PROTOBUF "If set, build protobuf inside libcaffe2.so." ON
   "BUILD_SHARED_LIBS AND BUILD_CUSTOM_PROTOBUF" OFF)
-cmake_dependent_option(
-  CAFFE2_USE_MSVC_STATIC_RUNTIME "Using MSVC static runtime libraries" ON
-  "NOT BUILD_SHARED_LIBS" OFF)
+cmake_dependent_option(CAFFE2_USE_MSVC_STATIC_RUNTIME "Using MSVC static runtime libraries" ON "NOT BUILD_SHARED_LIBS" OFF)
 option(BUILD_TEST "Build C++ test binaries (need gtest and gbenchmark)" OFF)
 option(BUILD_AOT_INDUCTOR_TEST "Build C++ test binaries for aot-inductor" OFF)
-option(BUILD_STATIC_RUNTIME_BENCHMARK
-       "Build C++ binaries for static runtime benchmarks (need gbenchmark)" OFF)
+option(BUILD_STATIC_RUNTIME_BENCHMARK "Build C++ binaries for static runtime benchmarks (need gbenchmark)" OFF)
 option(
   BUILD_MOBILE_BENCHMARK
   "Build C++ test binaries for mobile (ARM) targets(need gtest and gbenchmark)"
   OFF)
-option(
-  BUILD_MOBILE_TEST
-  "Build C++ test binaries for mobile (ARM) targets(need gtest and gbenchmark)"
-  OFF)
+option(BUILD_MOBILE_TEST "Build C++ test binaries for mobile (ARM) targets(need gtest and gbenchmark)" OFF)
 option(BUILD_JNI "Build JNI bindings" OFF)
-option(BUILD_MOBILE_AUTOGRAD
-       "Build autograd function in mobile build (in development)" OFF)
-cmake_dependent_option(INSTALL_TEST "Install test binaries if BUILD_TEST is on"
-                       ON "BUILD_TEST" OFF)
+option(BUILD_MOBILE_AUTOGRAD "Build autograd function in mobile build (in development)" OFF)
+
+cmake_dependent_option(INSTALL_TEST "Install test binaries if BUILD_TEST is on" ON "BUILD_TEST" OFF)
+
 option(USE_CPP_CODE_COVERAGE "Compile C/C++ with code coverage flags" OFF)
 option(USE_COLORIZE_OUTPUT "Colorize output during compilation" ON)
 option(USE_ASAN "Use Address+Undefined Sanitizers" OFF)
@@ -257,7 +250,7 @@ cmake_dependent_option(USE_CUSPARSELT "Use cuSPARSELt" ON "USE_CUDA" OFF)
 cmake_dependent_option(USE_CUDSS "Use cuDSS" ON "USE_CUDA" OFF)
 # USE_ROCM is guarded against in Dependencies.cmake because USE_ROCM is not properly defined here
 cmake_dependent_option(USE_CUFILE "Use cuFile" ON "USE_CUDA AND NOT WIN32" OFF)
-option(USE_FBGEMM "Use FBGEMM (quantized 8-bit server operators)" ON)
+option(USE_FBGEMM "Use FBGEMM (quantized 8-bit server operators)" OFF)
 option(USE_KINETO "Use Kineto profiling library" ON)
 option(USE_CUPTI_SO "Use CUPTI as a shared library" ON)
 option(USE_FAKELOWP "Use FakeLowp operators" OFF)
@@ -285,14 +278,11 @@ option(USE_NUMPY "Use NumPy" ON)
 option(USE_OBSERVERS "Use observers module." OFF)
 option(USE_OPENCL "Use OpenCL" OFF)
 option(USE_OPENMP "Use OpenMP for parallel code" ON)
-option(USE_PRECOMPILED_HEADERS "Use pre-compiled headers to accelerate build."
-       OFF)
-
+option(USE_PRECOMPILED_HEADERS "Use pre-compiled headers to accelerate build." OFF)
 option(USE_PROF "Use profiling" OFF)
 option(USE_PYTORCH_QNNPACK "Use ATen/QNNPACK (quantized 8-bit operators)" ON)
 option(USE_SNPE "Use Qualcomm's SNPE library" OFF)
-option(USE_SYSTEM_EIGEN_INSTALL
-    "Use system Eigen instead of the one under third_party" OFF)
+option(USE_SYSTEM_EIGEN_INSTALL "Use system Eigen instead of the one under third_party" OFF)
 cmake_dependent_option(
     USE_VALGRIND "Use Valgrind. Only available on Linux." ON
     "LINUX" OFF)
@@ -301,7 +291,7 @@ if(NOT DEFINED USE_VULKAN)
   cmake_dependent_option(USE_VULKAN "Use Vulkan GPU backend" ON "ANDROID" OFF)
 endif()
 
-option(USE_SOURCE_DEBUG_ON_MOBILE "Enable" ON)
+option(USE_SOURCE_DEBUG_ON_MOBILE "Enable" OFF)
 option(USE_LITE_INTERPRETER_PROFILER "Enable" ON)
 cmake_dependent_option(
   USE_LITE_AOTI "Include AOTI sources" OFF
@@ -370,6 +360,7 @@ cmake_dependent_option(
   BUILD_LAZY_TS_BACKEND
   "Build the lazy Torchscript backend, not compatible with mobile builds" ON
   "NOT INTERN_BUILD_MOBILE" OFF)
+
 cmake_dependent_option(BUILD_FUNCTORCH "Build Functorch" ON "BUILD_PYTHON" OFF)
 cmake_dependent_option(BUILD_BUNDLE_PTXAS "Bundle PTX into torch/bin fodler"
                        OFF "USE_CUDA" OFF)
@@ -560,7 +551,7 @@ if(MSVC)
   # https://learn.microsoft.com/en-us/cpp/build/reference/zc-cplusplus?view=msvc-170
   # * https://en.cppreference.com/w/cpp/preprocessor/replace#Predefined_macros
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:__cplusplus")
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler  /Zc:__cplusplus")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler /Zc:__cplusplus")
 
   set(CMAKE_NINJA_CMCLDEPS_RC OFF)
   foreach(
@@ -597,8 +588,7 @@ if(MSVC)
     # generators, if /MP is not added, then we may need to add /MP to the flags.
     # For other generators like ninja, we don't need to add /MP because it is
     # already handled by the generator itself.
-    if(CMAKE_GENERATOR MATCHES "Visual Studio" AND NOT ${flag_var} MATCHES
-                                                   "/MP")
+    if(CMAKE_GENERATOR MATCHES "Visual Studio" AND NOT ${flag_var} MATCHES "/MP")
       set(${flag_var} "${${flag_var}} /MP /bigobj")
     else()
       set(${flag_var} "${${flag_var}} /bigobj")
@@ -872,7 +862,7 @@ cmake_dependent_option(
   "Whether to build the flash_attention kernel for scaled dot product attention.\
   Will be disabled if not supported by the platform"
   ON
-  "USE_CUDA OR USE_ROCM;NOT MSVC"
+  "USE_CUDA OR USE_ROCM"
   OFF)
 
 # CAVEAT: Again, Flash Attention2 will error while building for sm52 while Mem
