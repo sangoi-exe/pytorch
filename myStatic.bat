@@ -268,6 +268,9 @@ IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\lib\uv.dll" set "LIBUV_DLL=%LIB
 IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\lib\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\lib\Release\uv.dll"
 IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\Release\uv.dll"
 IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\..\bin\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\..\bin\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\..\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\..\Release\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\..\..\bin\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\..\..\bin\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\uv.dll"
 
 IF NOT "%LIBUV_DLL%"=="" (
     set "libuv_ROOT=%LIBUV_ROOT_PATH%"
@@ -319,6 +322,9 @@ IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\lib\uv.dll" set "LIBUV_DLL=%LIB
 IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\lib\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\lib\Release\uv.dll"
 IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\Release\uv.dll"
 IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\..\bin\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\..\bin\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\..\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\..\Release\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\..\..\bin\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\..\..\bin\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\uv.dll"
 
 IF "%LIBUV_DLL%"=="" (
     ECHO [ERRO] libuv foi compilado, mas uv.dll nao foi encontrado em %LIBUV_ROOT_PATH%.
