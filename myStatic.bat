@@ -16,6 +16,7 @@ IF ERRORLEVEL 1 (
 )
 
 set "SCRIPT_DIR=%~dp0"
+set "SCRIPT_DIR_FWD=%SCRIPT_DIR:\=/%"
 pushd "%SCRIPT_DIR%"
 IF ERRORLEVEL 1 (
     ECHO [ERRO] Falha ao acessar o diretorio do script: %SCRIPT_DIR%
@@ -31,7 +32,9 @@ ECHO [INFO] Configurando o ambiente do Python...
 set "LOCAL_VENV_PATH=%SCRIPT_DIR%.venv"
 set "ACTIVATE_BAT=%LOCAL_VENV_PATH%\Scripts\activate.bat"
 set "PYTHON_EXE=%LOCAL_VENV_PATH%\Scripts\python.exe"
-set "BOOTSTRAP_PYTHON=C:\Users\lucas\OneDrive\Documentos\stable-diffusion-webui-codex\.venv\Scripts\python.exe"
+IF NOT DEFINED BOOTSTRAP_PYTHON (
+    set "BOOTSTRAP_PYTHON=C:\Users\lucas\OneDrive\Documentos\stable-diffusion-webui-codex\.venv\Scripts\python.exe"
+)
 set "EXPECTED_PYTHON_VERSION=3.12.10"
 
 IF NOT EXIST "%BOOTSTRAP_PYTHON%" (
@@ -138,13 +141,33 @@ IF ERRORLEVEL 1 (
     )
 )
 
+@REM --- NumPy para evitar fallback/warning em CMake (USE_NUMPY=ON) ---
+"%PYTHON_EXE%" -c "import numpy" >NUL 2>&1
+IF ERRORLEVEL 1 (
+    ECHO [INFO] Modulo numpy ausente. Instalando numpy...
+    "%PYTHON_EXE%" -m pip install --upgrade numpy
+    IF ERRORLEVEL 1 (
+        ECHO [ERRO] Falha ao instalar numpy no venv local. Abortando.
+        GOTO :FAIL
+    )
+    "%PYTHON_EXE%" -c "import numpy" >NUL 2>&1
+    IF ERRORLEVEL 1 (
+        ECHO [ERRO] Modulo numpy continua indisponivel apos instalacao. Abortando.
+        GOTO :FAIL
+    )
+)
+
 @REM ==================================================================
 @REM ==               CONFIGURACOES DE BUILD DO PYTORCH              ==
 @REM ==================================================================
 ECHO [INFO] Definindo as flags de build do PyTorch...
 
 @REM --- Estrategia de Build e Runtime ---
-set CMAKE_PROJECT_INCLUDE=c:/torch/tweak_runtime.cmake
+set "CMAKE_PROJECT_INCLUDE=%SCRIPT_DIR_FWD%tweak_runtime.cmake"
+IF NOT EXIST "%SCRIPT_DIR%tweak_runtime.cmake" (
+    ECHO [ERRO] Arquivo obrigatorio tweak_runtime.cmake nao encontrado em %SCRIPT_DIR%.
+    GOTO :FAIL
+)
 set BUILD_SHARED_LIBS=ON
 set BUILD_PYTHON=ON
 set BUILD_BINARY=OFF
@@ -158,6 +181,8 @@ set USE_NVRTC=ON
 set USE_CUDNN=ON
 set USE_STATIC_CUDNN=OFF
 set USE_FLASH_ATTENTION=ON
+set USE_CUSPARSELT=OFF
+set USE_CUDSS=OFF
 
 @REM --- Features Principais (CPU & Geral) ---
 set USE_MIMALLOC=ON
@@ -177,7 +202,7 @@ set USE_FBGEMM=OFF
 set USE_MAGMA=OFF
 
 @REM --- Plataformas e Ecossistemas Desativados ---
-set libuv_ROOT=C:/torch/third_party/libuv/libuv-install
+set "libuv_ROOT=%SCRIPT_DIR_FWD%third_party/libuv/libuv-install"
 set USE_LIBUV=ON
 set USE_DISTRIBUTED=ON
 set USE_GLOO=ON
@@ -187,6 +212,8 @@ set USE_MPS=OFF
 set CAN_COMPILE_METAL=OFF
 set USE_COREML_DELEGATE=OFF
 set USE_GLOO_WITH_OPENSSL=OFF
+set USE_TENSORPIPE=OFF
+set USE_KLEIDIAI=OFF
 
 @REM --- Ferramentas e Subprojetos Desativados ---
 set BUILD_FUNCTORCH=OFF
@@ -206,7 +233,11 @@ set MAX_JOBS=16
 
 @REM --- Arquiteturas CUDA ---
 set TORCH_CUDA_ARCH_LIST=8.6
-set CMAKE_CUDA_ARCHITECTURES=OFF
+
+call :ENSURE_LIBUV_RUNTIME
+IF ERRORLEVEL 1 (
+    GOTO :FAIL
+)
 
 ECHO [INFO] Ambiente configurado. Iniciando o build...
 ECHO ==================================================================
@@ -221,15 +252,102 @@ IF ERRORLEVEL 1 (
 ECHO [INFO] Processo de build finalizado.
 GOTO :SUCCESS
 
+:ENSURE_LIBUV_RUNTIME
+IF /I NOT "%USE_LIBUV%"=="ON" (
+    EXIT /B 0
+)
+
+set "LIBUV_ROOT_PATH=%libuv_ROOT%"
+IF "%LIBUV_ROOT_PATH%"=="" (
+    set "LIBUV_ROOT_PATH=%SCRIPT_DIR%third_party\libuv\libuv-install"
+)
+set "LIBUV_DLL="
+
+IF EXIST "%LIBUV_ROOT_PATH%\bin\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\bin\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\lib\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\lib\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\lib\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\lib\Release\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\Release\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\..\bin\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\..\bin\uv.dll"
+
+IF NOT "%LIBUV_DLL%"=="" (
+    set "libuv_ROOT=%LIBUV_ROOT_PATH%"
+    ECHO [INFO] libuv runtime resolvido: %LIBUV_DLL%
+    EXIT /B 0
+)
+
+ECHO [INFO] uv.dll nao encontrado em %LIBUV_ROOT_PATH%. Compilando/instalando libuv...
+set "LIBUV_SRC=%SCRIPT_DIR%third_party\libuv"
+set "LIBUV_BUILD=%LIBUV_SRC%\build-codex"
+
+IF NOT EXIST "%LIBUV_SRC%\CMakeLists.txt" (
+    ECHO [ERRO] Codigo-fonte do libuv nao encontrado em %LIBUV_SRC%.
+    ECHO [ERRO] Verifique submodule third_party/libuv.
+    EXIT /B 1
+)
+
+cmake -S "%LIBUV_SRC%" -B "%LIBUV_BUILD%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIBUV_BUILD_SHARED=ON -DLIBUV_BUILD_TESTS=OFF -DLIBUV_BUILD_BENCH=OFF -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX="%LIBUV_ROOT_PATH%"
+IF ERRORLEVEL 1 (
+    ECHO [ERRO] Falha ao configurar build do libuv.
+    EXIT /B 1
+)
+
+cmake --build "%LIBUV_BUILD%" --config Release --target install
+IF ERRORLEVEL 1 (
+    ECHO [ERRO] Falha ao compilar/instalar libuv.
+    EXIT /B 1
+)
+
+set "LIBUV_FALLBACK_COPY_USED=0"
+IF NOT EXIST "%LIBUV_ROOT_PATH%\bin\uv.dll" (
+    IF NOT EXIST "%LIBUV_ROOT_PATH%\bin" (
+        mkdir "%LIBUV_ROOT_PATH%\bin"
+        IF ERRORLEVEL 1 (
+            ECHO [ERRO] Falha ao criar diretorio de runtime do libuv em %LIBUV_ROOT_PATH%\bin.
+            EXIT /B 1
+        )
+    )
+    IF EXIST "%LIBUV_BUILD%\uv.dll" copy /Y "%LIBUV_BUILD%\uv.dll" "%LIBUV_ROOT_PATH%\bin\uv.dll" >NUL
+    IF NOT EXIST "%LIBUV_ROOT_PATH%\bin\uv.dll" IF EXIST "%LIBUV_BUILD%\Release\uv.dll" copy /Y "%LIBUV_BUILD%\Release\uv.dll" "%LIBUV_ROOT_PATH%\bin\uv.dll" >NUL
+    IF NOT EXIST "%LIBUV_ROOT_PATH%\bin\uv.dll" IF EXIST "%LIBUV_BUILD%\bin\uv.dll" copy /Y "%LIBUV_BUILD%\bin\uv.dll" "%LIBUV_ROOT_PATH%\bin\uv.dll" >NUL
+    IF NOT EXIST "%LIBUV_ROOT_PATH%\bin\uv.dll" IF EXIST "%LIBUV_BUILD%\bin\Release\uv.dll" copy /Y "%LIBUV_BUILD%\bin\Release\uv.dll" "%LIBUV_ROOT_PATH%\bin\uv.dll" >NUL
+    IF EXIST "%LIBUV_ROOT_PATH%\bin\uv.dll" set "LIBUV_FALLBACK_COPY_USED=1"
+)
+
+set "LIBUV_DLL="
+IF EXIST "%LIBUV_ROOT_PATH%\bin\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\bin\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\lib\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\lib\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\lib\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\lib\Release\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\Release\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\Release\uv.dll"
+IF "%LIBUV_DLL%"=="" IF EXIST "%LIBUV_ROOT_PATH%\..\bin\uv.dll" set "LIBUV_DLL=%LIBUV_ROOT_PATH%\..\bin\uv.dll"
+
+IF "%LIBUV_DLL%"=="" (
+    ECHO [ERRO] libuv foi compilado, mas uv.dll nao foi encontrado em %LIBUV_ROOT_PATH%.
+    EXIT /B 1
+)
+
+set "libuv_ROOT=%LIBUV_ROOT_PATH%"
+IF "%LIBUV_FALLBACK_COPY_USED%"=="1" (
+    ECHO [WARN] uv.dll nao foi encontrado no install prefix do libuv; foi aplicado fallback de copia do build tree.
+)
+ECHO [INFO] libuv runtime resolvido: %LIBUV_DLL%
+EXIT /B 0
+
 :ENSURE_SUBMODULES_READY
 ECHO [INFO] Validando submodules...
 set "SUBMODULE_STATUS_FILE=%TEMP%\torch-submodules-%RANDOM%%RANDOM%.txt"
 git submodule status --recursive > "%SUBMODULE_STATUS_FILE%" 2>&1
 IF ERRORLEVEL 1 (
     ECHO [WARN] Falha ao executar 'git submodule status --recursive'. Tentando reparo forcado de psimd...
-    call :REPAIR_PSIMD_SUBMODULE
-    IF ERRORLEVEL 1 (
-        ECHO [ERRO] Falha ao executar 'git submodule status --recursive' e reparo de psimd nao resolveu.
+    IF NOT EXIST "%SCRIPT_DIR%third_party\psimd\CMakeLists.txt" (
+        call :REPAIR_PSIMD_SUBMODULE
+        IF ERRORLEVEL 1 (
+            ECHO [ERRO] Falha ao executar 'git submodule status --recursive' e reparo de psimd nao resolveu.
+            IF EXIST "%SUBMODULE_STATUS_FILE%" type "%SUBMODULE_STATUS_FILE%"
+            IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+            EXIT /B 1
+        )
+    ) ELSE (
+        ECHO [ERRO] Falha ao executar 'git submodule status --recursive' e psimd aparenta consistente.
         IF EXIST "%SUBMODULE_STATUS_FILE%" type "%SUBMODULE_STATUS_FILE%"
         IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
         EXIT /B 1
@@ -261,9 +379,15 @@ IF NOT ERRORLEVEL 1 (
     git submodule update --init --recursive
     IF ERRORLEVEL 1 (
         ECHO [WARN] Falha em 'git submodule update --init --recursive'. Tentando reparo forcado de psimd...
-        call :REPAIR_PSIMD_SUBMODULE
-        IF ERRORLEVEL 1 (
-            ECHO [ERRO] Falha em 'git submodule update --init --recursive' e reparo de psimd nao resolveu.
+        IF NOT EXIST "%SCRIPT_DIR%third_party\psimd\CMakeLists.txt" (
+            call :REPAIR_PSIMD_SUBMODULE
+            IF ERRORLEVEL 1 (
+                ECHO [ERRO] Falha em 'git submodule update --init --recursive' e reparo de psimd nao resolveu.
+                IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
+                EXIT /B 1
+            )
+        ) ELSE (
+            ECHO [ERRO] Falha em 'git submodule update --init --recursive' sem indicio de corrupcao no psimd.
             IF EXIST "%SUBMODULE_STATUS_FILE%" del /Q "%SUBMODULE_STATUS_FILE%" >NUL 2>&1
             EXIT /B 1
         )

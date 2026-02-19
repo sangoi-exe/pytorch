@@ -413,14 +413,22 @@ if(USE_CCACHE)
   endif()
 endif()
 
-# Since TensorPipe does not support Windows, set it to OFF when WIN32 detected
-# On Windows platform, if user does not install libuv in build conda env and
-# does not set libuv_ROOT environment variable. Set USE_DISTRIBUTED to OFF.
 if(WIN32)
+  if(USE_TENSORPIPE)
+    message(
+      WARNING
+        "USE_TENSORPIPE=ON is not supported on Windows; forcing USE_TENSORPIPE=OFF."
+    )
+  endif()
   set(USE_TENSORPIPE OFF)
-  message(WARNING "TensorPipe cannot be used on Windows. Set it to OFF")
+
+  if(USE_KLEIDIAI)
+    message(
+      WARNING
+        "USE_KLEIDIAI=ON is not supported on Windows; forcing USE_KLEIDIAI=OFF."
+    )
+  endif()
   set(USE_KLEIDIAI OFF)
-  message(WARNING "KleidiAI cannot be used on Windows. Set it to OFF")
 
   if(USE_DISTRIBUTED AND NOT DEFINED ENV{libuv_ROOT})
     find_library(
@@ -434,8 +442,8 @@ if(WIN32)
       set(USE_GLOO OFF)
       message(
         WARNING
-          "Libuv is not installed in current conda env. Set USE_DISTRIBUTED to OFF. "
-          "Please run command 'conda install -c conda-forge libuv=1.39' to install libuv."
+          "USE_DISTRIBUTED=ON on Windows requires libuv. "
+          "Set libuv_ROOT to the libuv install prefix (containing bin/uv.dll) or disable USE_DISTRIBUTED."
       )
     else()
       set(ENV{libuv_ROOT} ${libuv_tmp_LIBRARY}/../../)
