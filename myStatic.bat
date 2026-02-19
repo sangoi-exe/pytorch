@@ -15,19 +15,39 @@ IF %ERRORLEVEL% NEQ 0 (
 )
 
 ECHO [INFO] Configurando o ambiente do Python...
-set "PYTHON_VENV_PATH=C:\Users\lucas\OneDrive\Documentos\stable-diffusion-webui-codex\.venv"
-set "PYTHON_EXE=%PYTHON_VENV_PATH%\Scripts\python.exe"
-IF NOT EXIST "%PYTHON_VENV_PATH%\Scripts\activate.bat" (
-    ECHO [ERRO] Virtualenv nao encontrado em %PYTHON_VENV_PATH%. Abortando.
+set "SCRIPT_DIR=%~dp0"
+set "LOCAL_VENV_PATH=%SCRIPT_DIR%.venv"
+set "ACTIVATE_BAT=%LOCAL_VENV_PATH%\Scripts\activate.bat"
+set "PYTHON_EXE=%LOCAL_VENV_PATH%\Scripts\python.exe"
+set "BOOTSTRAP_PYTHON=C:\Users\lucas\OneDrive\Documentos\stable-diffusion-webui-codex\.venv\Scripts\python.exe"
+
+IF NOT EXIST "%PYTHON_EXE%" (
+    ECHO [INFO] Virtualenv local nao encontrado em %LOCAL_VENV_PATH%. Criando...
+    IF NOT EXIST "%BOOTSTRAP_PYTHON%" (
+        ECHO [ERRO] Python bootstrap nao encontrado em %BOOTSTRAP_PYTHON%.
+        ECHO [ERRO] Ajuste BOOTSTRAP_PYTHON no myStatic.bat para um Python valido e tente novamente.
+        GOTO :EOF
+    )
+    "%BOOTSTRAP_PYTHON%" -m venv "%LOCAL_VENV_PATH%"
+    IF %ERRORLEVEL% NEQ 0 (
+        ECHO [ERRO] Falha ao criar virtualenv local em %LOCAL_VENV_PATH%. Abortando.
+        GOTO :EOF
+    )
+)
+
+IF NOT EXIST "%ACTIVATE_BAT%" (
+    ECHO [ERRO] activate.bat nao encontrado em %ACTIVATE_BAT%. Abortando.
     GOTO :EOF
 )
+
+call "%ACTIVATE_BAT%"
+IF %ERRORLEVEL% NEQ 0 (
+    ECHO [ERRO] Falha ao ativar o virtualenv local em %LOCAL_VENV_PATH%. Abortando.
+    GOTO :EOF
+)
+
 IF NOT EXIST "%PYTHON_EXE%" (
     ECHO [ERRO] Python nao encontrado em %PYTHON_EXE%. Abortando.
-    GOTO :EOF
-)
-call %PYTHON_VENV_PATH%\Scripts\activate.bat
-IF %ERRORLEVEL% NEQ 0 (
-    ECHO [ERRO] Falha ao ativar o virtualenv em %PYTHON_VENV_PATH%. Abortando.
     GOTO :EOF
 )
 
