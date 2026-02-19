@@ -1282,6 +1282,15 @@ if(USE_GLOO)
           get_filename_component(_libuv_root "${_libuv_root}" DIRECTORY)
         endif()
 
+        set(_libuv_include_candidates "")
+        if(NOT "${_libuv_root}" STREQUAL "")
+          list(APPEND _libuv_include_candidates
+            "${_libuv_root}/include"
+            "${_libuv_root}/../include"
+            "${_libuv_root}"
+          )
+        endif()
+
         set(_libuv_dll_candidates "")
         if(NOT "${_libuv_root}" STREQUAL "")
           list(APPEND _libuv_dll_candidates
@@ -1295,6 +1304,11 @@ if(USE_GLOO)
 
         if(DEFINED libuv_tmp_LIBRARY AND NOT "${libuv_tmp_LIBRARY}" STREQUAL "")
           get_filename_component(_libuv_lib_dir "${libuv_tmp_LIBRARY}" DIRECTORY)
+          list(APPEND _libuv_include_candidates
+            "${_libuv_lib_dir}/../include"
+            "${_libuv_lib_dir}/../../include"
+            "${_libuv_lib_dir}/include"
+          )
           list(APPEND _libuv_dll_candidates
             "${_libuv_lib_dir}/uv.dll"
             "${_libuv_lib_dir}/../bin/uv.dll"
@@ -1303,7 +1317,28 @@ if(USE_GLOO)
           )
         endif()
 
+        list(REMOVE_DUPLICATES _libuv_include_candidates)
         list(REMOVE_DUPLICATES _libuv_dll_candidates)
+
+        set(_libuv_include_dir "")
+        foreach(_libuv_include_candidate IN LISTS _libuv_include_candidates)
+          if(EXISTS "${_libuv_include_candidate}/uv.h")
+            set(_libuv_include_dir "${_libuv_include_candidate}")
+            break()
+          endif()
+        endforeach()
+
+        if(NOT "${_libuv_include_dir}" STREQUAL "")
+          include_directories(BEFORE SYSTEM "${_libuv_include_dir}")
+        else()
+          string(JOIN "; " _libuv_include_report ${_libuv_include_candidates})
+          message(FATAL_ERROR
+            "USE_LIBUV is ON (WIN32) but uv.h could not be resolved from libuv_ROOT='${_libuv_root}'. "
+            "libuv_tmp_LIBRARY='${libuv_tmp_LIBRARY}'. "
+            "Checked include candidates='${_libuv_include_report}'. "
+            "Set libuv_ROOT to the libuv install prefix or disable USE_LIBUV."
+          )
+        endif()
 
         set(_libuv_dll "")
         foreach(_libuv_candidate IN LISTS _libuv_dll_candidates)
