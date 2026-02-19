@@ -95,6 +95,22 @@ IF %ERRORLEVEL% NEQ 0 (
     )
 )
 
+@REM --- Bootstrap do backend de build (pyproject.toml -> setuptools.build_meta) ---
+"%PYTHON_EXE%" -c "import setuptools.build_meta" >NUL 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    ECHO [INFO] Backend setuptools.build_meta indisponivel. Instalando setuptools e wheel...
+    "%PYTHON_EXE%" -m pip install --upgrade setuptools wheel
+    IF %ERRORLEVEL% NEQ 0 (
+        ECHO [ERRO] Falha ao instalar setuptools/wheel no venv local. Abortando.
+        GOTO :FAIL
+    )
+    "%PYTHON_EXE%" -c "import setuptools.build_meta" >NUL 2>&1
+    IF %ERRORLEVEL% NEQ 0 (
+        ECHO [ERRO] Backend setuptools.build_meta continua indisponivel apos bootstrap. Abortando.
+        GOTO :FAIL
+    )
+)
+
 @REM ==================================================================
 @REM ==               CONFIGURACOES DE BUILD DO PYTORCH              ==
 @REM ==================================================================
