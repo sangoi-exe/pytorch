@@ -1329,7 +1329,7 @@ if(USE_GLOO)
         endforeach()
 
         if(NOT "${_libuv_include_dir}" STREQUAL "")
-          include_directories(BEFORE SYSTEM "${_libuv_include_dir}")
+          include_directories(BEFORE "${_libuv_include_dir}")
         else()
           string(JOIN "; " _libuv_include_report ${_libuv_include_candidates})
           message(FATAL_ERROR
