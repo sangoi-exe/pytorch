@@ -28,12 +28,58 @@ def _normalize_cuda_arch_list(raw_arch_list: str) -> list[str]:
         if not token or not token.isdigit():
             continue
 
-        normalized_token = f"sm_{token}"
+        normalized_token = f"sm{token}"
         if normalized_token in seen_tokens:
             continue
         seen_tokens.add(normalized_token)
         arch_tokens.append(normalized_token)
     return arch_tokens
+
+
+def _extract_cuda_tag(raw_value: str) -> str | None:
+    token = raw_value.strip().lower()
+    if not token:
+        return None
+
+    direct_match = re.fullmatch(r"cu(\d{2,4})", token)
+    if direct_match is not None:
+        return f"cu{direct_match.group(1)}"
+
+    semver_match = re.search(r"(\d+)\.(\d+)", token)
+    if semver_match is not None:
+        major = int(semver_match.group(1))
+        minor = int(semver_match.group(2))
+        return f"cu{major}{minor}"
+
+    compact_match = re.search(r"\b(\d{2,4})\b", token)
+    if compact_match is not None:
+        return f"cu{compact_match.group(1)}"
+
+    return None
+
+
+def _resolve_cuda_tag() -> str | None:
+    explicit = _extract_cuda_tag(os.getenv("PYTORCH_CUDA_VERSION_TAG", ""))
+    if explicit is not None:
+        return explicit
+
+    for env_name in ("CUDA_VERSION", "DESIRED_CUDA"):
+        parsed = _extract_cuda_tag(os.getenv(env_name, ""))
+        if parsed is not None:
+            return parsed
+
+    for env_name in ("CUDA_PATH", "CUDA_HOME", "CUDAToolkit_ROOT"):
+        parsed = _extract_cuda_tag(os.getenv(env_name, ""))
+        if parsed is not None:
+            return parsed
+
+    return None
+
+
+def _strip_prerelease_suffix(version: str) -> str:
+    base = version.split("+", 1)[0]
+    prerelease_removed = re.sub(r"(a|b|rc)\d+$", "", base)
+    return prerelease_removed or base
 
 
 def _append_cuda_arch_suffix(version: str) -> str:
@@ -45,13 +91,18 @@ def _append_cuda_arch_suffix(version: str) -> str:
     if not arch_tokens:
         return version
 
-    if all(token in version for token in arch_tokens):
-        return version
+    version_base = _strip_prerelease_suffix(version)
+    local_parts: list[str] = []
+    cuda_tag = _resolve_cuda_tag()
+    if cuda_tag is not None:
+        local_parts.append(cuda_tag)
+    local_parts.extend(arch_tokens)
 
-    suffix = ".".join(arch_tokens)
-    if "+" in version:
-        return f"{version}.{suffix}"
-    return f"{version}+{suffix}"
+    if not local_parts:
+        return version_base
+
+    suffix = ".".join(local_parts)
+    return f"{version_base}+{suffix}"
 
 
 def get_sha(pytorch_root: str | Path) -> str:
