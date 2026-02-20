@@ -13,6 +13,47 @@ UNKNOWN = "Unknown"
 RELEASE_PATTERN = re.compile(r"/v[0-9]+(\.[0-9]+)*(-rc[0-9]+)?/")
 
 
+def _normalize_cuda_arch_list(raw_arch_list: str) -> list[str]:
+    arch_tokens: list[str] = []
+    seen_tokens: set[str] = set()
+    for raw_token in re.split(r"[,\s;]+", raw_arch_list):
+        token = raw_token.strip()
+        if not token:
+            continue
+        token = token.lower()
+        token = token.replace("+ptx", "")
+        token = token.replace("sm_", "")
+        token = token.replace("compute_", "")
+        token = token.replace(".", "")
+        if not token or not token.isdigit():
+            continue
+
+        normalized_token = f"sm_{token}"
+        if normalized_token in seen_tokens:
+            continue
+        seen_tokens.add(normalized_token)
+        arch_tokens.append(normalized_token)
+    return arch_tokens
+
+
+def _append_cuda_arch_suffix(version: str) -> str:
+    raw_arch_list = os.getenv("TORCH_CUDA_ARCH_LIST", "").strip()
+    if not raw_arch_list:
+        return version
+
+    arch_tokens = _normalize_cuda_arch_list(raw_arch_list)
+    if not arch_tokens:
+        return version
+
+    if all(token in version for token in arch_tokens):
+        return version
+
+    suffix = ".".join(arch_tokens)
+    if "+" in version:
+        return f"{version}.{suffix}"
+    return f"{version}+{suffix}"
+
+
 def get_sha(pytorch_root: str | Path) -> str:
     try:
         rev = None
@@ -57,11 +98,13 @@ def get_torch_version(sha: str | None = None) -> str:
         version = os.getenv("PYTORCH_BUILD_VERSION", "")
         if build_number > 1:
             version += ".post" + str(build_number)
+        return version
     elif sha != UNKNOWN:
         if sha is None:
             sha = get_sha(pytorch_root)
         version += "+git" + sha[:7]
-    return version
+
+    return _append_cuda_arch_suffix(version)
 
 
 if __name__ == "__main__":
