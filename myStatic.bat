@@ -256,7 +256,16 @@ IF NOT DEFINED TORCH_NVCC_FLAGS set TORCH_NVCC_FLAGS=--threads 1
 ECHO [INFO] Paralelismo de build configurado: MAX_JOBS=%MAX_JOBS%, TORCH_NVCC_FLAGS=%TORCH_NVCC_FLAGS%
 
 @REM --- Arquiteturas CUDA ---
-set TORCH_CUDA_ARCH_LIST=8.6
+call :SELECT_CUDA_ARCH
+IF ERRORLEVEL 1 (
+    ECHO [ERRO] Falha ao selecionar arquitetura CUDA.
+    GOTO :FAIL
+)
+IF /I "%USER_ABORTED%"=="1" (
+    ECHO [INFO] Build cancelado pelo usuario.
+    GOTO :SUCCESS
+)
+ECHO [INFO] Arquitetura CUDA selecionada: TORCH_CUDA_ARCH_LIST=%TORCH_CUDA_ARCH_LIST%
 
 call :ENSURE_LIBUV_RUNTIME
 IF ERRORLEVEL 1 (
@@ -466,6 +475,48 @@ IF NOT EXIST "%SCRIPT_DIR%third_party\fbgemm\external\asmjit\CMakeLists.txt" (
 )
 
 EXIT /B 0
+
+:SELECT_CUDA_ARCH
+set "USER_ABORTED=0"
+
+:SELECT_CUDA_ARCH_MENU
+ECHO.
+ECHO [INFO] Selecione a arquitetura CUDA para este build:
+ECHO   [1] Build para sm_86 ^(RTX 30xx / Ampere^)
+ECHO   [2] Build para sm_80 ^(A100 / A800 / Ampere^)
+ECHO   [3] Build para sm_89 ^(RTX 40xx / Ada^)
+ECHO   [4] Build para sm_90 ^(H100 / H800 / Hopper^)
+ECHO   [5] Cancelar e sair
+choice /C 12345 /N /M "Opcao [1-5]: "
+set "CHOICE_RC=%ERRORLEVEL%"
+
+IF %CHOICE_RC% GTR 5 (
+    ECHO [ERRO] Falha no comando choice ^(ERRORLEVEL=%CHOICE_RC%^).
+    EXIT /B 1
+)
+IF %CHOICE_RC% EQU 5 (
+    set "USER_ABORTED=1"
+    EXIT /B 0
+)
+IF %CHOICE_RC% EQU 4 (
+    set "TORCH_CUDA_ARCH_LIST=9.0"
+    EXIT /B 0
+)
+IF %CHOICE_RC% EQU 3 (
+    set "TORCH_CUDA_ARCH_LIST=8.9"
+    EXIT /B 0
+)
+IF %CHOICE_RC% EQU 2 (
+    set "TORCH_CUDA_ARCH_LIST=8.0"
+    EXIT /B 0
+)
+IF %CHOICE_RC% EQU 1 (
+    set "TORCH_CUDA_ARCH_LIST=8.6"
+    EXIT /B 0
+)
+
+ECHO [WARN] Opcao invalida. Tente novamente.
+GOTO :SELECT_CUDA_ARCH_MENU
 
 :REPAIR_PSIMD_SUBMODULE
 git submodule deinit -f -- third_party/psimd >NUL 2>&1
