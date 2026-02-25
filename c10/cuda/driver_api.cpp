@@ -115,7 +115,7 @@ void* DriverAPI::get_nvml_handle() {
   return nvml_handle;
 }
 
-C10_EXPORT DriverAPI* DriverAPI::get() {
+DriverAPI* DriverAPI::get() {
   static DriverAPI singleton = create_driver_api();
   return &singleton;
 }

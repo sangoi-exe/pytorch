@@ -1,4 +1,5 @@
 #pragma once
+#include <c10/cuda/CUDAMacros.h>
 #include <cuda.h>
 #define NVML_NO_UNVERSIONED_FUNC_DEFS
 #include <nvml.h>
@@ -85,7 +86,7 @@ struct DriverAPI {
 #undef CREATE_MEMBER_VERSIONED
 #undef CREATE_MEMBER
 
-  static DriverAPI* get();
+  static C10_CUDA_API DriverAPI* get();
   static void* get_nvml_handle();
 };
 
