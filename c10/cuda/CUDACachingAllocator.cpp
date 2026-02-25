@@ -18,9 +18,16 @@
 
 #if !defined(USE_ROCM) && defined(PYTORCH_C10_DRIVER_API_SUPPORTED)
 #include <c10/cuda/driver_api.h>
+#if defined(_WIN32)
+#include <io.h>
+#include <process.h>
+#define getpid _getpid
+#define close _close
+#else
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
+#endif
 #endif
 
 #include <c10/util/Exception.h>
@@ -414,6 +421,9 @@ struct ExpandableSegment {
       CUDAAllocatorConfig::set_expandable_segments_handle_type(
           Expandable_Segments_Handle_Type::FABRIC_HANDLE);
       auto output = map(range);
+#if defined(_WIN32)
+      return output;
+#else
       if (output.ptr != nullptr) {
         return output;
       }
@@ -421,6 +431,7 @@ struct ExpandableSegment {
       CUDAAllocatorConfig::set_expandable_segments_handle_type(
           Expandable_Segments_Handle_Type::POSIX_FD);
       return map(range);
+#endif
     }
 
     while (end > handles_.size()) {
@@ -504,13 +515,20 @@ struct ExpandableSegment {
   SegmentRange share(SegmentRange range, std::ostream& buf) {
     auto begin = segmentLeft(range.ptr);
     auto end = segmentRight(range.ptr + range.size);
-    ShareHeader header{getpid(), segment_size_, end - begin};
+    ShareHeader header{static_cast<int64_t>(getpid()), segment_size_, end - begin};
     buf.write((const char*)&header, sizeof(ShareHeader));
     for (auto i : c10::irange(begin, end)) {
       // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
       auto& handle = handles_.at(i).value();
       if (CUDAAllocatorConfig::expandable_segments_handle_type() !=
           Expandable_Segments_Handle_Type::FABRIC_HANDLE) {
+#if defined(_WIN32)
+        TORCH_CHECK(
+            false,
+            "expandable_segments IPC export via POSIX FD is not supported on Windows. "
+            "Use expandable_segments_handle_type:FABRIC_HANDLE if available, or set "
+            "expandable_segments:False for cross-process tensors.");
+#else
         if (!handle.shareable_handle) {
           int fd = 0;
           C10_CUDA_DRIVER_CHECK(DriverAPI::get()->cuMemExportToShareableHandle_(
@@ -522,6 +540,7 @@ struct ExpandableSegment {
             handle.shareable_handle != std::nullopt,
             "shareable_handle is null");
         buf.write((const char*)&*handle.shareable_handle, sizeof(int));
+#endif
       } else {
         if (!handle.shareable_handle) {
           CUmemFabricHandle fabric_handle;
@@ -548,16 +567,23 @@ struct ExpandableSegment {
     buf.read((char*)&header, sizeof(ShareHeader));
     auto segment = std::make_unique<ExpandableSegment>(
         device, std::nullopt, header.segment_size, std::move(peers));
-// older build setups (e.g. multiwheels) do not have this syscall, added 2020
-// but the kernel on the system might still support it.
+    if (CUDAAllocatorConfig::expandable_segments_handle_type() !=
+        Expandable_Segments_Handle_Type::FABRIC_HANDLE) {
+#if defined(_WIN32)
+      TORCH_CHECK(
+          false,
+          "expandable_segments IPC import via POSIX FD is not supported on Windows. "
+          "Use expandable_segments_handle_type:FABRIC_HANDLE if available, or set "
+          "expandable_segments:False for cross-process tensors.");
+#else
+      // older build setups (e.g. multiwheels) do not have this syscall, added 2020
+      // but the kernel on the system might still support it.
 #ifndef SYS_pidfd_open
 #define SYS_pidfd_open 434
 #endif
 #ifndef SYS_pidfd_getfd
 #define SYS_pidfd_getfd 438
 #endif
-    if (CUDAAllocatorConfig::expandable_segments_handle_type() !=
-        Expandable_Segments_Handle_Type::FABRIC_HANDLE) {
       auto pidfd = syscall(SYS_pidfd_open, header.pid, 0);
       TORCH_CHECK(
           pidfd != -1 || errno != ENOSYS,
@@ -595,6 +621,7 @@ struct ExpandableSegment {
         segment->handles_.emplace_back(Handle{handle, std::nullopt});
       }
       close((int)pidfd);
+#endif
     } else {
       for (auto i : c10::irange(header.num_handles)) {
         (void)i;
@@ -683,7 +710,7 @@ struct ExpandableSegment {
       handles_.at(i) = std::nullopt;
       C10_CUDA_DRIVER_CHECK(DriverAPI::get()->cuMemUnmap_(
           ptr_ + segment_size_ * i, segment_size_));
-      if (h.shareable_handle) {
+      if (h.shareable_handle && std::holds_alternative<int>(*h.shareable_handle)) {
         close(std::get<int>(*h.shareable_handle));
       }
       C10_CUDA_DRIVER_CHECK(DriverAPI::get()->cuMemRelease_(h.handle));
@@ -731,7 +758,7 @@ struct ExpandableSegment {
     std::optional<std::variant<int, CUmemFabricHandle>> shareable_handle;
   };
   struct ShareHeader {
-    pid_t pid;
+    int64_t pid;
     size_t segment_size;
     size_t num_handles;
   };
