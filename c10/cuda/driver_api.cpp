@@ -5,13 +5,36 @@
 #include <c10/util/Exception.h>
 #include <c10/util/Logging.h>
 #include <cuda_runtime.h>
+#include <string>
+#if defined(_WIN32)
+#include <c10/util/win32-headers.h>
+#else
 #include <dlfcn.h>
+#endif
 
 namespace c10::cuda {
 
 namespace {
 
 void* get_symbol(const char* name, int version);
+template <typename FuncPtr>
+FuncPtr lookup_library_symbol(void* library_handle, const char* symbol_name) {
+#if defined(_WIN32)
+  return reinterpret_cast<FuncPtr>(
+      GetProcAddress(reinterpret_cast<HMODULE>(library_handle), symbol_name));
+#else
+  return reinterpret_cast<FuncPtr>(dlsym(library_handle, symbol_name));
+#endif
+}
+
+std::string get_library_symbol_lookup_error() {
+#if defined(_WIN32)
+  return "WinError " + std::to_string(GetLastError());
+#else
+  const char* error = dlerror();
+  return error ? std::string(error) : std::string("unknown loader error");
+#endif
+}
 
 DriverAPI create_driver_api() {
   void* handle_1 = DriverAPI::get_nvml_handle();
@@ -32,16 +55,21 @@ DriverAPI create_driver_api() {
 #undef LOOKUP_LIBCUDA_ENTRY_WITH_VERSION_OPTIONAL
 
   if (handle_1) {
-#define LOOKUP_NVML_ENTRY(name)                          \
-  r.name##_ = ((decltype(&name))dlsym(handle_1, #name)); \
-  TORCH_INTERNAL_ASSERT(r.name##_, "Can't find ", #name, ": ", dlerror())
+#define LOOKUP_NVML_ENTRY(name)                                           \
+  r.name##_ = lookup_library_symbol<decltype(&name)>(handle_1, #name);     \
+  TORCH_INTERNAL_ASSERT(                                                    \
+      r.name##_,                                                            \
+      "Can't find ",                                                        \
+      #name,                                                                \
+      " in NVML library: ",                                                 \
+      get_library_symbol_lookup_error())
     C10_NVML_DRIVER_API(LOOKUP_NVML_ENTRY)
 #undef LOOKUP_NVML_ENTRY
   }
 
   if (handle_1) {
 #define LOOKUP_NVML_ENTRY_OPTIONAL(name) \
-  r.name##_ = ((decltype(&name))dlsym(handle_1, #name));
+  r.name##_ = lookup_library_symbol<decltype(&name)>(handle_1, #name);
     C10_NVML_DRIVER_API_OPTIONAL(LOOKUP_NVML_ENTRY_OPTIONAL)
 #undef LOOKUP_NVML_ENTRY_OPTIONAL
   }
@@ -79,8 +107,12 @@ void* get_symbol(const char* name, int version) {
 } // namespace
 
 void* DriverAPI::get_nvml_handle() {
-  static void* nvml_hanle = dlopen("libnvidia-ml.so.1", RTLD_LAZY);
-  return nvml_hanle;
+#if defined(_WIN32)
+  static void* nvml_handle = reinterpret_cast<void*>(LoadLibraryA("nvml.dll"));
+#else
+  static void* nvml_handle = dlopen("libnvidia-ml.so.1", RTLD_LAZY);
+#endif
+  return nvml_handle;
 }
 
 C10_EXPORT DriverAPI* DriverAPI::get() {
